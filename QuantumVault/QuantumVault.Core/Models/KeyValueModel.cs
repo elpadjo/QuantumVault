@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace QuantumVault.Core.Models
+﻿namespace QuantumVault.Core.Models
 {
-    internal class KeyValueModel
+    public class KeyValueModel
     {
+        public string? Key { get; set; } = string.Empty;
+        public string? Value { get; set; } = string.Empty;
     }
 }

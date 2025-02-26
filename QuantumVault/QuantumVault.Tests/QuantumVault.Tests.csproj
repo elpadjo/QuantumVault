@@ -23,6 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\QuantumVault.Api\QuantumVault.Api.csproj" />
+    <ProjectReference Include="..\QuantumVault.Core\QuantumVault.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
