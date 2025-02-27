@@ -9,11 +9,22 @@ builder.Services.AddSingleton<IKeyValueStoreService, KeyValueStoreService>();
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    app.UseExceptionHandler("/Error");
+}
+
 // Map endpoints
 app.MapStoreEndpoints();
 
 app.UseHttpsRedirection();
 app.Run();
+
+public partial class Program { }
 
 
 
