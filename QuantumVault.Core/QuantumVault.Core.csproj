@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\QuantumVault.Infrastructure\QuantumVault.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>
