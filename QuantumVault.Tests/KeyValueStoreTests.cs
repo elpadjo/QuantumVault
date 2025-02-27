@@ -2,6 +2,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using QuantumVault.Core.Models;
 
 namespace QuantumVault.Tests
 {
@@ -48,7 +49,7 @@ namespace QuantumVault.Tests
             await _client.PostAsJsonAsync("/quantumvault/put", keyValue);
 
             // Act
-            var response = await _client.GetAsync($"/quantumvault/read?key={keyValue.Key}");
+            var response = await _client.GetAsync($"/quantumvault/read/{keyValue.Key}");
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -64,7 +65,7 @@ namespace QuantumVault.Tests
             await _client.PostAsJsonAsync("/quantumvault/put", keyValue);
 
             // Act
-            var response = await _client.DeleteAsync($"/quantumvault/delete?key={keyValue.Key}");
+            var response = await _client.DeleteAsync($"/quantumvault/delete/{keyValue.Key}");
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -99,16 +100,19 @@ namespace QuantumVault.Tests
         [Fact]
         public async Task BatchPut_ShouldStoreMultipleKeys()
         {
-            // Arrange
-            var keyValues = new Dictionary<string, string>
-        {
-            { "batch1", "value1" },
-            { "batch2", "value2" },
-            { "batch3", "value3" }
-        };
+            // Arrange            
+            var requestPayload = new KeyValueBatchModel
+            {
+                KeyValues = new Dictionary<string, string>
+                {
+                    { "batch1", "value1" },
+                    { "batch2", "value2" },
+                    { "batch3", "value3" }
+                }
+            };
 
             // Act
-            var response = await _client.PostAsJsonAsync("/quantumvault/batchput", keyValues);
+            var response = await _client.PostAsJsonAsync("/quantumvault/batchput", requestPayload);
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

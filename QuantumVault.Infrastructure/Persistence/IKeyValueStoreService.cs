@@ -1,5 +1,4 @@
-﻿
-namespace QuantumVault.Infrastructure.Persistence
+﻿namespace QuantumVault.Infrastructure.Persistence
 {
     public interface IKeyValueStoreService
     {
