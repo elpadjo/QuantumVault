@@ -35,21 +35,21 @@ namespace QuantumVault.Tests
             var keyValue = new { Key = "testKey", Value = "testValue" };
 
             // Act
-            var response = await _client.PostAsJsonAsync("/quantumvault/put", keyValue);
+            var response = await _client.PostAsJsonAsync("/quantumvault/v1/put", keyValue);
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
-        [Fact] //FAILS FOR NOW
+        [Fact]
         public async Task Read_ShouldReturnStoredValue()
         {
             // Arrange
             var keyValue = new { Key = "readKey", Value = "readValue" };
-            await _client.PostAsJsonAsync("/quantumvault/put", keyValue);
+            await _client.PostAsJsonAsync("/quantumvault/v1/put", keyValue);
 
             // Act
-            var response = await _client.GetAsync($"/quantumvault/read/{keyValue.Key}");
+            var response = await _client.GetAsync($"/quantumvault/v1/read/{keyValue.Key}");
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -62,10 +62,10 @@ namespace QuantumVault.Tests
         {
             // Arrange
             var keyValue = new { Key = "deleteKey", Value = "deleteValue" };
-            await _client.PostAsJsonAsync("/quantumvault/put", keyValue);
+            await _client.PostAsJsonAsync("/quantumvault/v1/put", keyValue);
 
             // Act
-            var response = await _client.DeleteAsync($"/quantumvault/delete/{keyValue.Key}");
+            var response = await _client.DeleteAsync($"/quantumvault/v1/delete/{keyValue.Key}");
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -84,11 +84,11 @@ namespace QuantumVault.Tests
 
             foreach (var kv in keyValues)
             {
-                await _client.PostAsJsonAsync("/quantumvault/put", kv);
+                await _client.PostAsJsonAsync("/quantumvault/v1/put", kv);
             }
 
             // Act
-            var response = await _client.GetAsync("/quantumvault/range?startKey=A&endKey=C");
+            var response = await _client.GetAsync("/quantumvault/v1/range?startKey=A&endKey=C");
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -112,7 +112,7 @@ namespace QuantumVault.Tests
             };
 
             // Act
-            var response = await _client.PostAsJsonAsync("/quantumvault/batchput", requestPayload);
+            var response = await _client.PostAsJsonAsync("/quantumvault/v1/batchput", requestPayload);
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
