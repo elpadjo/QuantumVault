@@ -1,11 +1,22 @@
 ﻿using QuantumVault.Infrastructure.Persistence;
 using System.Collections.Concurrent;
+using System.Text.Json;
 
 namespace QuantumVault.Core.Services
 {
     public class KeyValueStoreService : IKeyValueStoreService
     {
-        private readonly ConcurrentDictionary<string, string> _store = new();
+        private readonly ConcurrentDictionary<string, string> _store;
+        private readonly IStoragePersistenceService _persistenceService;
+        private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
+
+        public KeyValueStoreService(IStoragePersistenceService persistenceService)
+        {
+            Directory.CreateDirectory(basePath); // Ensure directory exists
+
+            _persistenceService = persistenceService;
+            _store = _persistenceService.LoadData();
+        }
 
         public Task PutAsync(string key, string value)
         {
@@ -15,18 +26,28 @@ namespace QuantumVault.Core.Services
             }
 
             _store[key] = value;
+            _persistenceService.AppendToLog("PUT", key, value);
             return Task.CompletedTask;
         }
 
-        public Task<string?> ReadAsync(string key)
+        public Task<string>? ReadAsync(string key)
         {
             if (string.IsNullOrWhiteSpace(key))
-            {
                 throw new ArgumentException("Key cannot be empty.");
+
+            if (_store.TryGetValue(key, out var value))            
+                return Task.FromResult(value);            
+
+            foreach (var file in Directory.GetFiles(basePath, "sst_*.json").OrderByDescending(f => f))
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
+                if (data != null && data.TryGetValue(key, out value))
+                {
+                    return Task.FromResult(value); // Return first found value
+                }
             }
 
-            _store.TryGetValue(key, out var value);
-            return Task.FromResult(value);
+            return null;
         }
 
         public Task DeleteAsync(string key)
@@ -37,6 +58,7 @@ namespace QuantumVault.Core.Services
             }
 
             _store.TryRemove(key, out _);
+            _persistenceService.AppendToLog("DELETE", key);
             return Task.CompletedTask;
         }
 
@@ -47,9 +69,20 @@ namespace QuantumVault.Core.Services
                 throw new ArgumentException("StartKey and/or EndKey cannot be empty.");
             }
 
-            var results = _store
+            /* var results = _store
                 .Where(kv => string.Compare(kv.Key, startKey) >= 0 && string.Compare(kv.Key, endKey) <= 0)
+                .ToDictionary(kv => kv.Key, kv => kv.Value);*/
+
+            var results = _store
+                .Where(kv => string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
+                             string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0)
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            // Ensure endKey is explicitly included if it exists
+            if (_store.TryGetValue(endKey, out var endValue) && !results.ContainsKey(endKey))
+            {
+                results[endKey] = endValue;
+            }
 
             return Task.FromResult<IDictionary<string, string>>(results);
         }
@@ -64,8 +97,14 @@ namespace QuantumVault.Core.Services
             foreach (var kv in keyValues)
             {
                 _store[kv.Key] = kv.Value;
+                _persistenceService.AppendToLog("PUT", kv.Key, kv.Value);
             }
             return Task.FromResult<IDictionary<string, string>>(new Dictionary<string, string>(keyValues));
+        }
+
+        public int GetStoreCount()
+        {
+            return _store.Count;
         }
     }
 }

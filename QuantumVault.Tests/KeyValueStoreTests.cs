@@ -8,7 +8,7 @@ namespace QuantumVault.Tests
 {
     public class KeyValueStoreTests : IClassFixture<WebApplicationFactory<Program>>
     {
-        private readonly HttpClient _client;        
+        private readonly HttpClient _client;
 
         public KeyValueStoreTests(WebApplicationFactory<Program> factory)
         {
@@ -74,21 +74,22 @@ namespace QuantumVault.Tests
         [Fact]
         public async Task Range_ShouldReturnMultipleKeys()
         {
-            // Arrange
-            var keyValues = new List<object>
-        {
-            new { Key = "A", Value = "1" },
-            new { Key = "B", Value = "2" },
-            new { Key = "C", Value = "3" }
-        };
-
-            foreach (var kv in keyValues)
+            // Arrange            
+            var requestPayload = new KeyValueBatchModel
             {
-                await _client.PostAsJsonAsync("/quantumvault/v1/put", kv);
-            }
+                KeyValues = new Dictionary<string, string>
+                {
+                    { "batch1", "value1" },
+                    { "batch2", "value2" },
+                    { "batch3", "value3" }
+                }
+            };
 
             // Act
-            var response = await _client.GetAsync("/quantumvault/v1/range?startKey=A&endKey=C");
+            await _client.PostAsJsonAsync("/quantumvault/v1/batchput", requestPayload);
+
+            // Act
+            var response = await _client.GetAsync("/quantumvault/v1/range?startKey=batch1&endKey=batch3");
 
             // Assert
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

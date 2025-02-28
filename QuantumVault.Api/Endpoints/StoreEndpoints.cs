@@ -17,6 +17,9 @@ namespace QuantumVault.Api.Endpoints
             {
                 try
                 {
+                    if (string.IsNullOrWhiteSpace(request.Key) || string.IsNullOrWhiteSpace(request.Value))                    
+                        return Results.BadRequest(new { message = "Payload must contain exactly one key-value pair with non-empty values." });
+                    
                     await storeService.PutAsync(request.Key, request.Value);
                     return Results.Ok(new { message = "Key stored successfully" });
 
@@ -29,7 +32,7 @@ namespace QuantumVault.Api.Endpoints
                 {
                     return Results.BadRequest(new { message = ex.Message });
                 }
-                catch (Exception ex)  // Catch-all for unexpected issues
+                catch (Exception)  // Catch-all for unexpected issues
                 {
                     return Results.Problem("An unexpected error occurred.");
                 }
