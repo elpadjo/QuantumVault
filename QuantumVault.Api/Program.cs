@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using QuantumVault.Api.Endpoints;
 using QuantumVault.Core.Services;
 using QuantumVault.Infrastructure.Persistence;
@@ -13,6 +14,7 @@ var certPassword = builder.Configuration["ASPNETCORE_Kestrel__Certificates__Defa
 // Register services
 builder.Services.AddSingleton<IKeyValueStoreService, KeyValueStoreService>();
 builder.Services.AddSingleton<IStoragePersistenceService, StoragePersistenceService>();
+builder.Services.AddHostedService<SnapshotBackgroundService>();
 
 /*builder.WebHost.ConfigureKestrel(options =>
 {
