@@ -1,5 +1,6 @@
 ﻿using QuantumVault.Infrastructure.Persistence;
 using System.Collections.Concurrent;
+using System.Text.Json;
 
 namespace QuantumVault.Core.Services
 {
@@ -7,9 +8,12 @@ namespace QuantumVault.Core.Services
     {
         private readonly ConcurrentDictionary<string, string> _store;
         private readonly IStoragePersistenceService _persistenceService;
+        private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
         public KeyValueStoreService(IStoragePersistenceService persistenceService)
         {
+            Directory.CreateDirectory(basePath); // Ensure directory exists
+
             _persistenceService = persistenceService;
             _store = _persistenceService.LoadData();
         }
@@ -26,15 +30,24 @@ namespace QuantumVault.Core.Services
             return Task.CompletedTask;
         }
 
-        public Task<string?> ReadAsync(string key)
+        public Task<string>? ReadAsync(string key)
         {
             if (string.IsNullOrWhiteSpace(key))
-            {
                 throw new ArgumentException("Key cannot be empty.");
+
+            if (_store.TryGetValue(key, out var value))            
+                return Task.FromResult(value);            
+
+            foreach (var file in Directory.GetFiles(basePath, "sst_*.json").OrderByDescending(f => f))
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
+                if (data != null && data.TryGetValue(key, out value))
+                {
+                    return Task.FromResult(value); // Return first found value
+                }
             }
 
-            _store.TryGetValue(key, out var value);
-            return Task.FromResult(value);
+            return null;
         }
 
         public Task DeleteAsync(string key)
@@ -87,6 +100,11 @@ namespace QuantumVault.Core.Services
                 _persistenceService.AppendToLog("PUT", kv.Key, kv.Value);
             }
             return Task.FromResult<IDictionary<string, string>>(new Dictionary<string, string>(keyValues));
+        }
+
+        public int GetStoreCount()
+        {
+            return _store.Count;
         }
     }
 }

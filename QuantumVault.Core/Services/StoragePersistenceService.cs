@@ -9,10 +9,11 @@ namespace QuantumVault.Core.Services
         private readonly string _filePath;
         private readonly string _logFilePath;
         private readonly object _lock = new();
+        private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
         public StoragePersistenceService()
         {
-            string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
+            
             Directory.CreateDirectory(basePath); // Ensure directory exists
 
             _filePath = Path.Combine(basePath, "data_store.json");
@@ -95,6 +96,43 @@ namespace QuantumVault.Core.Services
             {
                 Console.WriteLine($"Error replaying WAL: {ex.Message}");
             }
+        }
+
+        public void FlushStoreToSSTable()
+        {
+            if (_store.Count == 0) return;
+
+            var sstFileName = Path.Combine(basePath, $"sst_{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+            var sortedData = _store.OrderBy(kv => kv.Key).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            File.WriteAllText(sstFileName, JsonSerializer.Serialize(sortedData));
+
+            _store.Clear(); // Clear memory after flush
+        }
+
+        public void CompactSSTables()
+        {
+            var sstFiles = Directory.GetFiles(basePath, "sst_*.json").OrderBy(f => f).ToList();
+
+            if (sstFiles.Count < 2) return; // No need to compact if there's only one SSTable
+
+            Dictionary<string, string> mergedData = new();
+
+            foreach (var file in sstFiles)
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
+                if (data != null)
+                {
+                    foreach (var kv in data)
+                    {
+                        mergedData[kv.Key] = kv.Value; // Keep latest value
+                    }
+                }
+                File.Delete(file); // Remove old file after merging
+            }
+
+            var newSSTFile = $"sst_{DateTime.UtcNow:yyyyMMddHHmmss}_compacted.json";
+            File.WriteAllText(newSSTFile, JsonSerializer.Serialize(mergedData));
         }
     }
 }

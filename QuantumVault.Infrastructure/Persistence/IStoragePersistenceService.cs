@@ -8,5 +8,7 @@ namespace QuantumVault.Infrastructure.Persistence
         void SaveData();
         void AppendToLog(string operation, string key, string? value = null);
         void ReplayLog();
+        void FlushStoreToSSTable();
+        void CompactSSTables();
     }
 }

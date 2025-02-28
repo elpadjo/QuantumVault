@@ -17,7 +17,7 @@ namespace QuantumVault.Core.Services
             while (!stoppingToken.IsCancellationRequested)
             {
                 SaveData();
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
             }
         }
 
