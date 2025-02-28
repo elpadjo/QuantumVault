@@ -7,6 +7,13 @@
     <UserSecretsId>3bfeddea-8a74-4600-9d39-aa1b163f079b</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
+  
+  <PropertyGroup>
+   <DockerfileContext>..</DockerfileContext>
+   <Dockerfile>../Dockerfile</Dockerfile>
+   <DockerfileFile>../Dockerfile</DockerfileFile>
+  </PropertyGroup>
+
 
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
