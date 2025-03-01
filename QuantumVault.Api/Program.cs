@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using QuantumVault.Api.Endpoints;
 using QuantumVault.Core.Services;
-using QuantumVault.Infrastructure.Persistence;
+using QuantumVault.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 //var certPath = builder.Configuration["ASPNETCORE_Kestrel__Certificates__Default__Path"];
@@ -25,8 +25,8 @@ builder.Services.AddHostedService<SnapshotBackgroundService>();
     }
 });*/
 
-Console.WriteLine($"Certificate Path: {certPath}");
-Console.WriteLine($"Certificate Exists: {File.Exists(certPath)}");
+//Console.WriteLine($"Certificate Path: {certPath}");
+//Console.WriteLine($"Certificate Exists: {File.Exists(certPath)}");
 
 var app = builder.Build();
 

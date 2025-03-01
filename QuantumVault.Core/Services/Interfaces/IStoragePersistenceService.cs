@@ -1,6 +1,7 @@
-﻿using System.Collections.Concurrent;
+﻿using QuantumVault.Core.Models;
+using System.Collections.Concurrent;
 
-namespace QuantumVault.Infrastructure.Persistence
+namespace QuantumVault.Services.Interfaces
 {
     public interface IStoragePersistenceService
     {
@@ -11,5 +12,7 @@ namespace QuantumVault.Infrastructure.Persistence
         void FlushStoreToSSTable();
         void CompactSSTables(int _sstCompactionBatchSize);
         int GetSSTableCount();
+        void Enqueue(KeyValueRequestModel request);
+        KeyValueRequestModel? Dequeue();
     }
 }

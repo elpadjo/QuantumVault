@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Hosting;
-using QuantumVault.Infrastructure.Persistence;
+using QuantumVault.Services.Interfaces;
 
 namespace QuantumVault.Core.Services
 {

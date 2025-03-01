@@ -1,4 +1,6 @@
-﻿using QuantumVault.Infrastructure.Persistence;
+﻿using QuantumVault.Core.Enums;
+using QuantumVault.Core.Models;
+using QuantumVault.Services.Interfaces;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,6 +18,7 @@ namespace QuantumVault.Core.Services
 
         private readonly int _maxEntries = 1000;
         private readonly LinkedList<KeyValuePair<string, string>> _recentEntries;
+        public readonly SortedDictionary<int, Queue<KeyValueRequestModel>> _taskQueue = new();
 
         public StoragePersistenceService()
         {
@@ -64,22 +67,37 @@ namespace QuantumVault.Core.Services
                     LoadExistingSnapshot();
                     AddEntries(_store);
 
-                    // Write snapshot to temp file
-                    using var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None);
-                    using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-                    writer.WriteStartObject();
-                    foreach (var entry in _recentEntries)
+                    using (var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
                     {
-                        writer.WritePropertyName(entry.Key);
-                        JsonSerializer.Serialize(writer, entry.Value);
-                    }
-                    writer.WriteEndObject();
+                        writer.WriteStartObject();
+                        foreach (var entry in _recentEntries)
+                        {
+                            writer.WritePropertyName(entry.Key);
+                            JsonSerializer.Serialize(writer, entry.Value);
+                        }
+                        writer.WriteEndObject();
+                    } // <-- Stream is now properly closed before replacement
 
                     // Atomically replace old snapshot
-                    File.Replace(tempFile, _filePath, null);
+                    if (File.Exists(_filePath))
+                    {
+                        File.Replace(tempFile, _filePath, null);
+                    }
+                    else
+                    {
+                        File.Move(tempFile, _filePath);
+                    }
+
                     MarkJournalCommitted(); // Mark success
 
                     File.WriteAllText(_logFilePath, string.Empty); // Clear WAL after persistence
+                }
+                catch (IOException ex) when (ex.Message.Contains("used by another process"))
+                {
+                    Console.WriteLine("File is locked, retrying in 100ms...");
+                    Thread.Sleep(100);
+                    SaveData(); // Retry logic
                 }
                 catch (Exception ex)
                 {
@@ -87,7 +105,6 @@ namespace QuantumVault.Core.Services
                 }
             }
         }
-
 
         public void AppendToLog(string operation, string key, string? value = null)
         {
@@ -196,6 +213,30 @@ namespace QuantumVault.Core.Services
         {
             var sstFiles = Directory.GetFiles(basePath, "sst_*.json").ToList();
             return sstFiles.Count;
+        }
+
+        public void Enqueue(KeyValueRequestModel request)
+        {
+            lock (_lock)
+            {
+                if (!_taskQueue.ContainsKey((int)request.Priority))
+                    _taskQueue[(int)request.Priority] = new Queue<KeyValueRequestModel>();
+
+                _taskQueue[(int)request.Priority].Enqueue(request);
+            }
+        }
+
+        public KeyValueRequestModel? Dequeue()
+        {
+            lock (_lock)
+            {
+                foreach (var key in _taskQueue.Keys.OrderBy(k => k))
+                {
+                    if (_taskQueue[key].Count > 0)
+                        return _taskQueue[key].Dequeue();
+                }
+            }
+            return null;
         }
 
         private void LoadExistingSnapshot()
