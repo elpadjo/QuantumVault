@@ -64,22 +64,37 @@ namespace QuantumVault.Core.Services
                     LoadExistingSnapshot();
                     AddEntries(_store);
 
-                    // Write snapshot to temp file
-                    using var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None);
-                    using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-                    writer.WriteStartObject();
-                    foreach (var entry in _recentEntries)
+                    using (var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
                     {
-                        writer.WritePropertyName(entry.Key);
-                        JsonSerializer.Serialize(writer, entry.Value);
-                    }
-                    writer.WriteEndObject();
+                        writer.WriteStartObject();
+                        foreach (var entry in _recentEntries)
+                        {
+                            writer.WritePropertyName(entry.Key);
+                            JsonSerializer.Serialize(writer, entry.Value);
+                        }
+                        writer.WriteEndObject();
+                    } // <-- Stream is now properly closed before replacement
 
                     // Atomically replace old snapshot
-                    File.Replace(tempFile, _filePath, null);
+                    if (File.Exists(_filePath))
+                    {
+                        File.Replace(tempFile, _filePath, null);
+                    }
+                    else
+                    {
+                        File.Move(tempFile, _filePath);
+                    }
+
                     MarkJournalCommitted(); // Mark success
 
                     File.WriteAllText(_logFilePath, string.Empty); // Clear WAL after persistence
+                }
+                catch (IOException ex) when (ex.Message.Contains("used by another process"))
+                {
+                    Console.WriteLine("File is locked, retrying in 100ms...");
+                    Thread.Sleep(100);
+                    SaveData(); // Retry logic
                 }
                 catch (Exception ex)
                 {
@@ -87,6 +102,7 @@ namespace QuantumVault.Core.Services
                 }
             }
         }
+
 
 
         public void AppendToLog(string operation, string key, string? value = null)

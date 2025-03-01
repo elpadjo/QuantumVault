@@ -1,5 +1,6 @@
 ﻿using QuantumVault.Infrastructure.Persistence;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace QuantumVault.Core.Services
@@ -10,24 +11,51 @@ namespace QuantumVault.Core.Services
         private readonly IStoragePersistenceService _persistenceService;
         private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
+        private readonly int _maxBatchSize = int.Parse(Environment.GetEnvironmentVariable("MAX_BATCH_SIZE") ?? "50");
+        private readonly int _maxQueueSize = int.Parse(Environment.GetEnvironmentVariable("MAX_QUEUE_SIZE") ?? "1000");
+        private readonly int _writeLimit = int.Parse(Environment.GetEnvironmentVariable("WRITE_LIMIT") ?? "500");
+        private readonly int _readLimit = int.Parse(Environment.GetEnvironmentVariable("READ_LIMIT") ?? "500");
+        private readonly double _cpuHighThreshold = double.Parse(Environment.GetEnvironmentVariable("CPU_HIGH_THRESHOLD") ?? "80"); // 80%
+        private readonly double _cpuLowThreshold = double.Parse(Environment.GetEnvironmentVariable("CPU_LOW_THRESHOLD") ?? "50"); // 50%
+        private readonly SemaphoreSlim _writeSemaphore;
+        private readonly SemaphoreSlim _readSemaphore;
+        private readonly ConcurrentQueue<KeyValuePair<string, string>> _writeQueue = new();
+
         public KeyValueStoreService(IStoragePersistenceService persistenceService)
         {
             Directory.CreateDirectory(basePath); // Ensure directory exists
+
+            _writeSemaphore = new SemaphoreSlim(_writeLimit, _writeLimit);
+            _readSemaphore = new SemaphoreSlim(_readLimit, _readLimit);
 
             _persistenceService = persistenceService;
             _store = _persistenceService.LoadData();
         }
 
-        public Task PutAsync(string key, string value)
+        public async Task<Task> PutAsync(string key, string value)
         {
-            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
-            {
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))            
                 throw new ArgumentException("Invalid input: Key and Value are required.");
-            }
+            
+            if (_writeQueue.Count >= _maxQueueSize)
+                throw new InvalidOperationException("Write queue is overloaded. Try again later.");
 
-            _store[key] = value;
-            _persistenceService.AppendToLog("PUT", key, value);
-            return Task.CompletedTask;
+            // manage load
+            AdjustThrottling();
+
+            await _writeSemaphore.WaitAsync();
+            try
+            {
+                _writeQueue.Enqueue(new KeyValuePair<string, string>(key, value));
+                
+                _store[key] = value;
+                _persistenceService.AppendToLog("PUT", key, value);
+                return Task.CompletedTask;
+            }
+            finally
+            {
+                _writeSemaphore.Release();
+            }
         }
 
         public Task<string>? ReadAsync(string key)
@@ -147,24 +175,99 @@ namespace QuantumVault.Core.Services
             return (results, totalItems);
         }
 
-        public Task<IDictionary<string, string>> BatchPutAsync(Dictionary<string, string> keyValues)
+
+        public async Task<IDictionary<string, string>> BatchPutAsync(Dictionary<string, string> keyValues)
         {
             if (keyValues == null || keyValues.Count == 0)
-            {
                 throw new ArgumentException("At least one key-value pair is required.");
-            }
 
-            foreach (var kv in keyValues)
+            // Check system load and reject if overloaded
+            AdjustThrottling();
+
+            // Limit batch size to prevent large spikes
+            if (keyValues.Count > _maxBatchSize)
+                throw new InvalidOperationException($"Batch size exceeds the allowed limit of {_maxBatchSize} items.");
+
+            await _writeSemaphore.WaitAsync();
+            try
             {
-                _store[kv.Key] = kv.Value;
-                _persistenceService.AppendToLog("PUT", kv.Key, kv.Value);
+                foreach (var kv in keyValues)
+                {
+                    // Ensure queue does not exceed limit
+                    if (_writeQueue.Count >= _maxQueueSize)
+                        throw new InvalidOperationException("Write queue is overloaded. Try again later.");
+
+                    _writeQueue.Enqueue(kv);
+                    _store[kv.Key] = kv.Value;
+                    _persistenceService.AppendToLog("PUT", kv.Key, kv.Value);
+                }
+
+                return new Dictionary<string, string>(keyValues);
             }
-            return Task.FromResult<IDictionary<string, string>>(new Dictionary<string, string>(keyValues));
+            finally
+            {
+                _writeSemaphore.Release();
+            }
         }
+
 
         public int GetStoreCount()
         {
             return _store.Count;
+        }
+
+        private int _overloadCounter = 0;
+        private const int _maxOverloadCount = 3; // Threshold before hard throttling
+
+        private void AdjustThrottling()
+        {
+            var cpuUsage = GetCpuUsage(); // Implement this method
+
+            if (cpuUsage > _cpuHighThreshold)
+            {
+                _overloadCounter++; // Increment only on high CPU usage
+
+                if (_writeSemaphore.CurrentCount > 0 && _writeSemaphore.Wait(0)) // Non-blocking wait
+                {
+                    _readSemaphore.Wait(0); // Also attempt to reduce read load
+                }
+
+                if (_overloadCounter >= _maxOverloadCount)
+                {
+                    throw new InvalidOperationException("System is overloaded. Write operations are temporarily blocked.");
+                }
+            }
+            else
+            {
+                _overloadCounter = 0; // Reset counter on normal CPU usage
+
+                if (cpuUsage < _cpuLowThreshold)
+                {
+                    // Only release if the semaphore isn't already at its limit
+                    if (_writeSemaphore.CurrentCount < _writeLimit)
+                        _writeSemaphore.Release();
+
+                    if (_readSemaphore.CurrentCount < _readLimit)
+                        _readSemaphore.Release();
+                }
+            }
+        }
+
+
+        private static double GetCpuUsage()
+        {
+            var startTime = DateTime.UtcNow;
+            var startCpuUsage = Process.GetCurrentProcess().TotalProcessorTime;
+
+            Thread.Sleep(500); // Short delay to measure CPU activity
+
+            var endTime = DateTime.UtcNow;
+            var endCpuUsage = Process.GetCurrentProcess().TotalProcessorTime;
+
+            var cpuUsedMs = (endCpuUsage - startCpuUsage).TotalMilliseconds;
+            var totalMsPassed = (endTime - startTime).TotalMilliseconds;
+
+            return (cpuUsedMs / (Environment.ProcessorCount * totalMsPassed)) * 100;
         }
     }
 }

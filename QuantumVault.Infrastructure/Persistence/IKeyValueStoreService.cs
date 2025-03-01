@@ -4,7 +4,7 @@ namespace QuantumVault.Infrastructure.Persistence
 {
     public interface IKeyValueStoreService
     {
-        Task PutAsync(string key, string value);
+        Task<Task> PutAsync(string key, string value);
         Task<string>? ReadAsync(string key);
         Task DeleteAsync(string key);
         Task<(IDictionary<string, string> Results, int TotalItems)> ReadKeyRangeAsync(
