@@ -11,6 +11,9 @@ namespace QuantumVault.Core.Services
         private readonly object _lock = new();
         private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
+        private readonly int _maxEntries = 1000;
+        private readonly LinkedList<KeyValuePair<string, string>> _recentEntries;
+
         public StoragePersistenceService()
         {
             
@@ -18,6 +21,7 @@ namespace QuantumVault.Core.Services
 
             _filePath = Path.Combine(basePath, "data_store.json");
             _logFilePath = Path.Combine(basePath, "data_store.log");
+            _recentEntries = new LinkedList<KeyValuePair<string, string>>();
 
             ReplayLog();
         }
@@ -47,8 +51,22 @@ namespace QuantumVault.Core.Services
             {
                 try
                 {
-                    var json = JsonSerializer.Serialize(_store, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(_filePath, json);
+                    //load old data
+                    LoadExistingSnapshot();
+
+                    AddEntries(_store);
+
+                    using var stream = new FileStream(_filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+
+                    writer.WriteStartObject(); // Start JSON object
+                    foreach (var entry in _recentEntries)
+                    {
+                        writer.WritePropertyName(entry.Key?.ToString()); // Ensure key is a string
+                        JsonSerializer.Serialize(writer, entry.Value); // Serialize value properly
+                    }
+                    writer.WriteEndObject(); // End JSON object
+
                     File.WriteAllText(_logFilePath, string.Empty); // Clear WAL after persistence
                 }
                 catch (Exception ex)
@@ -110,15 +128,18 @@ namespace QuantumVault.Core.Services
             _store.Clear(); // Clear memory after flush
         }
 
-        public void CompactSSTables()
+        public void CompactSSTables(int _sstCompactionBatchSize)
         {
             var sstFiles = Directory.GetFiles(basePath, "sst_*.json").OrderBy(f => f).ToList();
 
-            if (sstFiles.Count < 2) return; // No need to compact if there's only one SSTable
+            if (sstFiles.Count <= _sstCompactionBatchSize) return; // Ensure enough files to compact
+
+            // Select the oldest `_sstCompactionBatchSize` files for compaction
+            var filesToCompact = sstFiles.Take(_sstCompactionBatchSize).ToList();
 
             Dictionary<string, string> mergedData = new();
 
-            foreach (var file in sstFiles)
+            foreach (var file in filesToCompact)
             {
                 var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
                 if (data != null)
@@ -131,8 +152,61 @@ namespace QuantumVault.Core.Services
                 File.Delete(file); // Remove old file after merging
             }
 
-            var newSSTFile = $"sst_{DateTime.UtcNow:yyyyMMddHHmmss}_compacted.json";
+            // Extract the earliest timestamp from the batch (i.e., the last file in `filesToCompact`)
+            string earliestTimestamp = Path.GetFileName(filesToCompact.Last()).Split('_')[1];
+
+            // Name the new compacted SST file using the earliest timestamp
+            var newSSTFile = Path.Combine(basePath, $"sst_{earliestTimestamp}_compacted.json");
             File.WriteAllText(newSSTFile, JsonSerializer.Serialize(mergedData));
         }
+
+        public int GetSSTableCount()
+        {
+            var sstFiles = Directory.GetFiles(basePath, "sst_*.json").ToList();
+            return sstFiles.Count;
+        }
+
+        private void LoadExistingSnapshot()
+        {
+            if (!File.Exists(_filePath)) return;
+
+            lock (_lock)
+            {
+                try
+                {
+                    var json = File.ReadAllText(_filePath);
+                    var dictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                    if (dictionary != null)
+                    {
+                        foreach (var entry in dictionary)
+                        {
+                            _recentEntries.AddLast(new KeyValuePair<string, string>(entry.Key, entry.Value));
+                            if (_recentEntries.Count > _maxEntries)
+                                _recentEntries.RemoveFirst();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading snapshot: {ex.Message}");
+                }
+            }
+        }
+
+        private void AddEntries(ConcurrentDictionary<string, string> entries)
+        {
+            lock (_lock)
+            {
+                foreach (var entry in entries)
+                {
+                    _recentEntries.AddLast(new KeyValuePair<string, string>(entry.Key, entry.Value));
+
+                    if (_recentEntries.Count > _maxEntries)
+                        _recentEntries.RemoveFirst();
+                }
+            }
+        }
+
+
     }
 }
