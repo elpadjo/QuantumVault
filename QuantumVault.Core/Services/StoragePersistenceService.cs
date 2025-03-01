@@ -1,5 +1,7 @@
 ﻿using QuantumVault.Infrastructure.Persistence;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace QuantumVault.Core.Services
@@ -81,7 +83,10 @@ namespace QuantumVault.Core.Services
             lock (_lock)
             {
                 using var writer = new StreamWriter(_logFilePath, append: true);
-                writer.WriteLine($"{operation}|{key}|{value}");
+
+                string logEntry = $"{operation}|{key}|{value ?? string.Empty}";
+                string checksum = ComputeSHA256(logEntry);
+                writer.WriteLine($"{logEntry}|{checksum}");
             }
         }
 
@@ -94,12 +99,24 @@ namespace QuantumVault.Core.Services
                 foreach (var line in File.ReadLines(_logFilePath))
                 {
                     var parts = line.Split('|');
-                    if (parts.Length < 2) continue;
+                    if (parts.Length < 3) continue; // Ensure there are enough parts
 
-                    var operation = parts[0];
-                    var key = parts[1];
-                    var value = parts.Length > 2 ? parts[2] : null;
+                    string operation = parts[0];
+                    string key = parts[1];
+                    string value = parts.Length > 3 ? parts[2] : null;
+                    string storedChecksum = parts[^1]; // Last part is the checksum
 
+                    // Recompute checksum and validate
+                    string logEntryWithoutChecksum = $"{operation}|{key}|{value ?? string.Empty}";
+                    string computedChecksum = ComputeSHA256(logEntryWithoutChecksum);
+
+                    if (!string.Equals(storedChecksum, computedChecksum, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"Corruption detected in log entry: {line}");
+                        continue; // Skip corrupted entry
+                    }
+
+                    // Apply valid log entry
                     if (operation == "PUT" && value != null)
                     {
                         _store[key] = value;
@@ -205,6 +222,14 @@ namespace QuantumVault.Core.Services
                         _recentEntries.RemoveFirst();
                 }
             }
+        }
+
+        private string ComputeSHA256(string input)
+        {
+            using var sha256 = SHA256.Create();
+            byte[] bytes = Encoding.UTF8.GetBytes(input);
+            byte[] hash = sha256.ComputeHash(bytes);
+            return Convert.ToHexString(hash); // Returns the hash as a hex string
         }
 
 
