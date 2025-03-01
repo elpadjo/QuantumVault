@@ -53,21 +53,26 @@ namespace QuantumVault.Core.Services
             {
                 try
                 {
-                    //load old data
-                    LoadExistingSnapshot();
-
+                    LoadExistingSnapshot(); // Load old data before saving
                     AddEntries(_store);
 
-                    using var stream = new FileStream(_filePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                    using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+                    string tempFilePath = Path.Combine(basePath, "data_store_temp.json");
 
-                    writer.WriteStartObject(); // Start JSON object
-                    foreach (var entry in _recentEntries)
+                    using (var stream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
                     {
-                        writer.WritePropertyName(entry.Key?.ToString()); // Ensure key is a string
-                        JsonSerializer.Serialize(writer, entry.Value); // Serialize value properly
+                        writer.WriteStartObject(); // Start JSON object
+                        foreach (var entry in _recentEntries)
+                        {
+                            writer.WritePropertyName(entry.Key?.ToString()); // Ensure key is a string
+                            JsonSerializer.Serialize(writer, entry.Value); // Serialize value properly
+                        }
+                        writer.WriteEndObject(); // End JSON object
                     }
-                    writer.WriteEndObject(); // End JSON object
+
+                    // Atomic replace (backup file ensures rollback in case of failure)
+                    string backupFilePath = Path.Combine(basePath, "data_store_backup.json");
+                    File.Replace(tempFilePath, _filePath, backupFilePath);
 
                     File.WriteAllText(_logFilePath, string.Empty); // Clear WAL after persistence
                 }
