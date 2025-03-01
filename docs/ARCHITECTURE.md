@@ -71,15 +71,14 @@ QuantumVault is a **persistent Key/Value store** designed for efficiency, scalab
 QuantumVault is packaged as a **Docker container** for easy deployment.
 1. **Build & Run**
    ```sh
-   docker build -t quantumvault .
-   docker run -p 5000:5000 quantumvault
+   docker-compose up --build -d
    ```
-2. The service will be available at `http://localhost:5000/quantumvault/v1/`
+2. The service will be available at `http://localhost:8080/quantumvault/v1/`
 
 ---
 
 ## 7. **Conclusion**
 QuantumVault is designed for **high performance, fault tolerance, and scalability**. By leveraging **WAL, SSTables, and efficient caching**, it ensures **low-latency access and reliable persistence** while handling large datasets effectively.
 
-For more details, check the [API Documentation](api.md).
+For more details, check the [API Documentation](docs/API.md).
 
