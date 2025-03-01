@@ -89,12 +89,25 @@ namespace QuantumVault.Api.Endpoints
                 }
             });
 
-            app.MapGet("/quantumvault/v1/range", async ([FromServices] IKeyValueStoreService storeService, [FromQuery] string startKey, [FromQuery] string endKey) =>
+            app.MapGet("/quantumvault/v1/range", async ([FromServices] IKeyValueStoreService storeService, 
+                [FromQuery] string startKey, 
+                [FromQuery] string endKey,
+                [FromQuery] int pageSize = 20, 
+                [FromQuery] int pageNumber = 1) =>
             {                
                 try
                 {
-                    var values = await storeService.ReadKeyRangeAsync(startKey, endKey);
-                    return values.Count > 0 ? Results.Ok(values) : Results.NotFound("No keys found in range.");
+                    var(values, totalItems) = await storeService.ReadKeyRangeAsync(startKey, endKey, pageSize, pageNumber);
+                   
+                    return values.Count > 0 
+                        ? Results.Ok(new
+                        {
+                            PageNumber = pageNumber,
+                            PageSize = pageSize,
+                            TotalItems = totalItems,
+                            Data = values
+                        }) 
+                        : Results.NotFound("No keys found in range.");
                 }
                 catch (InvalidOperationException ex)
                 {
