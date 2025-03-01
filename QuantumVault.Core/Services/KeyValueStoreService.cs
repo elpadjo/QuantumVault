@@ -75,55 +75,77 @@ namespace QuantumVault.Core.Services
         }
 
 
-        public async Task<IDictionary<string, string>> ReadKeyRangeAsync(string startKey, string endKey)
+        public async Task<(IDictionary<string, string> Results, int TotalItems)> ReadKeyRangeAsync(
+            string startKey, string endKey, int pageSize, int pageNumber)
         {
             if (string.IsNullOrWhiteSpace(startKey) || string.IsNullOrWhiteSpace(endKey))
             {
-                throw new ArgumentException("StartKey and/or EndKey cannot be empty.");
+                throw new ArgumentException("StartKey and EndKey cannot be empty.");
             }
 
-            Dictionary<string, string> results = new();
+            if (pageSize <= 0 || pageNumber <= 0)
+            {
+                throw new ArgumentException("PageSize and PageNumber must be greater than zero.");
+            }
 
-            // Step 1: Check in-memory store first
-            foreach (var kv in _store.Where(kv =>
-                        string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
-                        string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0))
+            var results = new Dictionary<string, string>();
+
+            // Get totalItems
+            int totalItems = _store.Count(kv =>
+                string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
+                string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0);
+
+            // Read from in-memory store first
+            var inMemoryResults = _store
+                .Where(kv => string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
+                             string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0)
+                .OrderBy(kv => kv.Key) // Ensure sorted order
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            foreach (var kv in inMemoryResults)
             {
                 results[kv.Key] = kv.Value;
             }
 
-            // Step 2: Ensure endKey is explicitly included if it exists in _store
-            if (_store.TryGetValue(endKey, out var endValue) && !results.ContainsKey(endKey))
+            // If not enough results, continue searching SST files
+            if (results.Count < pageSize)
             {
-                results[endKey] = endValue;
-            }
+                int remaining = pageSize - results.Count;
 
-            // Step 3: Check SST files in order of recency
-            foreach (var file in Directory.GetFiles(basePath, "sst_*.json").OrderByDescending(f => f))
-            {
-                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(file));
-                if (data == null) continue;
-
-                foreach (var kv in data)
+                foreach (var file in Directory.GetFiles(basePath, "sst_*.json").OrderByDescending(f => f))
                 {
-                    if (string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
-                        string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0 &&
-                        !results.ContainsKey(kv.Key))  // Avoid overwriting newer values
+                    var data = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(file));
+                    if (data == null) continue;
+
+                    // Get totalItems
+                    totalItems += _store.Count(kv =>
+                        string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
+                        string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0);
+
+                    var fileResults = data
+                        .Where(kv => string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
+                                     string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0)
+                        .OrderBy(kv => kv.Key)
+                        .Skip((pageNumber - 1) * pageSize)
+                        .Take(remaining)
+                        .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+                    foreach (var kv in fileResults)
                     {
                         results[kv.Key] = kv.Value;
                     }
-                }
 
-                // Step 4: Ensure endKey is explicitly included if found in SST
-                if (data.TryGetValue(endKey, out endValue) && !results.ContainsKey(endKey))
-                {
-                    results[endKey] = endValue;
+                    if (results.Count >= pageSize)
+                    {
+                        break; // Stop once we have enough records
+                    }
                 }
             }
 
-            return results;
+            return (results, totalItems);
         }
-
 
         public Task<IDictionary<string, string>> BatchPutAsync(Dictionary<string, string> keyValues)
         {
