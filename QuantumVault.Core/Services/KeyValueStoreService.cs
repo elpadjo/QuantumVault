@@ -186,28 +186,45 @@ namespace QuantumVault.Core.Services
             if (keyValues == null || keyValues.Count == 0)
                 throw new ArgumentException("At least one key-value pair is required.");
 
-            // Check system load and reject if overloaded
-            AdjustThrottling();
+            // Check system load and adjust batch size accordingly
+            int adjustedBatchSize = GetAdjustedBatchSize();
 
-            // Limit batch size to prevent large spikes
             if (keyValues.Count > _maxBatchSize)
                 throw new InvalidOperationException($"Batch size exceeds the allowed limit of {_maxBatchSize} items.");
 
             await _writeSemaphore.WaitAsync();
             try
             {
-                foreach (var kv in keyValues)
-                {
-                    // Ensure queue does not exceed limit
-                    if (_writeQueue.Count >= _maxQueueSize)
-                        throw new InvalidOperationException("Write queue is overloaded. Try again later.");
+                var processedItems = new Dictionary<string, string>();
+                var batchQueue = new Queue<KeyValuePair<string, string>>(keyValues);
 
-                    _writeQueue.Enqueue(kv);
-                    _store[kv.Key] = kv.Value;
-                    _persistenceService.AppendToLog("PUT", kv.Key, kv.Value);
+                while (batchQueue.Count > 0)
+                {
+                    int currentBatchSize = Math.Min(adjustedBatchSize, batchQueue.Count);
+                    var currentBatch = new List<KeyValuePair<string, string>>();
+
+                    for (int i = 0; i < currentBatchSize; i++)
+                    {
+                        currentBatch.Add(batchQueue.Dequeue());
+                    }
+
+                    foreach (var kv in currentBatch)
+                    {
+                        if (_writeQueue.Count >= _maxQueueSize)
+                            throw new InvalidOperationException("Write queue is overloaded. Try again later.");
+
+                        _writeQueue.Enqueue(kv);
+                        _store[kv.Key] = kv.Value;
+                        _persistenceService.AppendToLog("PUT", kv.Key, kv.Value);
+                        processedItems[kv.Key] = kv.Value;
+                    }
+
+                    // Introduce a short delay to manage system pressure if needed
+                    if (IsSystemUnderHighLoad())
+                        await Task.Delay(50);
                 }
 
-                return new Dictionary<string, string>(keyValues);
+                return processedItems;
             }
             finally
             {
@@ -246,6 +263,24 @@ namespace QuantumVault.Core.Services
         private int _overloadCounter = 0;
         private const int _maxOverloadCount = 3; // Threshold before hard throttling
 
+        // Simulated system load checks (replace with real monitoring logic)
+        private bool IsSystemUnderHighLoad() => _writeQueue.Count > (_maxQueueSize * 0.7);
+        private bool IsSystemUnderVeryHighLoad() => _writeQueue.Count > (_maxQueueSize * 0.9);
+
+        // Dynamically adjusts batch size based on system load
+        private int GetAdjustedBatchSize()
+        {
+            double cpuUsage = GetCpuUsage();
+            bool queueHighLoad = IsSystemUnderHighLoad();
+            bool queueVeryHighLoad = IsSystemUnderVeryHighLoad();
+
+            if (cpuUsage > 80 || queueVeryHighLoad)
+                return _maxBatchSize / 4; // Further reduce for extreme cases
+            if (cpuUsage > 60 || queueHighLoad)
+                return _maxBatchSize / 2; // Reduce batch size if under heavy load
+            return _maxBatchSize;
+        }
+
         private void AdjustThrottling()
         {
             var cpuUsage = GetCpuUsage(); // Implement this method
@@ -279,7 +314,6 @@ namespace QuantumVault.Core.Services
                 }
             }
         }
-
 
         private static double GetCpuUsage()
         {
