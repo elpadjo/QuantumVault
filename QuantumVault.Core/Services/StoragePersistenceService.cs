@@ -10,6 +10,7 @@ namespace QuantumVault.Core.Services
     {
         private readonly string _filePath;
         private readonly string _logFilePath;
+        private readonly string _journalFilePath;
         private readonly object _lock = new();
         private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
@@ -23,8 +24,11 @@ namespace QuantumVault.Core.Services
 
             _filePath = Path.Combine(basePath, "data_store.json");
             _logFilePath = Path.Combine(basePath, "data_store.log");
+            _journalFilePath = Path.Combine(basePath, "data_store.journal");
+
             _recentEntries = new LinkedList<KeyValuePair<string, string>>();
 
+            RecoverFromJournal();
             ReplayLog();
         }
 
@@ -53,26 +57,27 @@ namespace QuantumVault.Core.Services
             {
                 try
                 {
-                    LoadExistingSnapshot(); // Load old data before saving
+                    string tempFile = Path.Combine(basePath, "data_store.tmp");
+                    WriteToJournal("SNAPSHOT", tempFile);
+
+                    // Load old data & merge
+                    LoadExistingSnapshot();
                     AddEntries(_store);
 
-                    string tempFilePath = Path.Combine(basePath, "data_store_temp.json");
-
-                    using (var stream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
-                    using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+                    // Write snapshot to temp file
+                    using var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None);
+                    using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+                    writer.WriteStartObject();
+                    foreach (var entry in _recentEntries)
                     {
-                        writer.WriteStartObject(); // Start JSON object
-                        foreach (var entry in _recentEntries)
-                        {
-                            writer.WritePropertyName(entry.Key?.ToString()); // Ensure key is a string
-                            JsonSerializer.Serialize(writer, entry.Value); // Serialize value properly
-                        }
-                        writer.WriteEndObject(); // End JSON object
+                        writer.WritePropertyName(entry.Key);
+                        JsonSerializer.Serialize(writer, entry.Value);
                     }
+                    writer.WriteEndObject();
 
-                    // Atomic replace (backup file ensures rollback in case of failure)
-                    string backupFilePath = Path.Combine(basePath, "data_store_backup.json");
-                    File.Replace(tempFilePath, _filePath, backupFilePath);
+                    // Atomically replace old snapshot
+                    File.Replace(tempFile, _filePath, null);
+                    MarkJournalCommitted(); // Mark success
 
                     File.WriteAllText(_logFilePath, string.Empty); // Clear WAL after persistence
                 }
@@ -82,6 +87,7 @@ namespace QuantumVault.Core.Services
                 }
             }
         }
+
 
         public void AppendToLog(string operation, string key, string? value = null)
         {
@@ -142,12 +148,16 @@ namespace QuantumVault.Core.Services
         {
             if (_store.Count == 0) return;
 
-            var sstFileName = Path.Combine(basePath, $"sst_{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+            string sstFileName = Path.Combine(basePath, $"sst_{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+            WriteToJournal("SSTABLE", sstFileName);
+
             var sortedData = _store.OrderBy(kv => kv.Key).ToDictionary(kv => kv.Key, kv => kv.Value);
 
             File.WriteAllText(sstFileName, JsonSerializer.Serialize(sortedData));
 
             _store.Clear(); // Clear memory after flush
+
+            MarkJournalCommitted();
         }
 
         public void CompactSSTables(int _sstCompactionBatchSize)
@@ -235,6 +245,54 @@ namespace QuantumVault.Core.Services
             byte[] bytes = Encoding.UTF8.GetBytes(input);
             byte[] hash = sha256.ComputeHash(bytes);
             return Convert.ToHexString(hash); // Returns the hash as a hex string
+        }
+
+        private void WriteToJournal(string operation, string targetFile)
+        {
+            lock (_lock)
+            {
+                var journalEntry = $"{DateTime.UtcNow:O}|{operation}|{targetFile}|IN_PROGRESS";
+                File.WriteAllText(_journalFilePath, journalEntry); // Overwrite journal with latest transaction
+            }
+        }
+
+        private void MarkJournalCommitted()
+        {
+            lock (_lock)
+            {
+                if (File.Exists(_journalFilePath))
+                {
+                    var lines = File.ReadAllText(_journalFilePath);
+                    if (!string.IsNullOrEmpty(lines))
+                    {
+                        File.WriteAllText(_journalFilePath, lines.Replace("IN_PROGRESS", "COMMITTED"));
+                    }
+                }
+            }
+        }
+
+        private void RecoverFromJournal()
+        {
+            if (!File.Exists(_journalFilePath)) return;
+
+            try
+            {
+                var entry = File.ReadAllText(_journalFilePath).Split('|');
+                if (entry.Length < 4 || entry[3] == "COMMITTED") return; // Skip if already committed
+
+                var operation = entry[1];
+                var targetFile = entry[2];
+
+                if (operation == "SNAPSHOT" && File.Exists(targetFile))
+                {
+                    // Recover last snapshot if necessary
+                    File.Replace(targetFile, _filePath, null);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error recovering from journal: {ex.Message}");
+            }
         }
 
 
