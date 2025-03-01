@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using QuantumVault.Core.Models;
-using QuantumVault.Infrastructure.Persistence;
+using QuantumVault.Services.Interfaces;
 
 namespace QuantumVault.Api.Endpoints
 {

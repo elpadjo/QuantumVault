@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace QuantumVault.Infrastructure.Persistence
+namespace QuantumVault.Services.Interfaces
 {
     public interface IStoragePersistenceService
     {

@@ -21,7 +21,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\QuantumVault.Core\QuantumVault.Core.csproj" />
-    <ProjectReference Include="..\QuantumVault.Infrastructure\QuantumVault.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
