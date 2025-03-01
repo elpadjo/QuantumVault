@@ -2,7 +2,7 @@
 
 ## Base URL
 ```
-http://localhost:5000/quantumvault/v1/
+http://localhost:8080/quantumvault/v1/
 ```
 
 ## Endpoints
