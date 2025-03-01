@@ -5,7 +5,7 @@ namespace QuantumVault.Services.Interfaces
     public interface IKeyValueStoreService
     {
         Task<Task> PutAsync(string key, string value);
-        Task<string>? ReadAsync(string key);
+        Task<string?> ReadAsync(string key);
         Task DeleteAsync(string key);
         Task<(IDictionary<string, string> Results, int TotalItems)> ReadKeyRangeAsync(
             string startKey, string endKey, int pageSize, int pageNumber);

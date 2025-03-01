@@ -63,24 +63,24 @@ namespace QuantumVault.Core.Services
             }
         }
 
-        public Task<string>? ReadAsync(string key)
+        public Task<string?> ReadAsync(string key)
         {
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key cannot be empty.");
 
-            if (_store.TryGetValue(key, out var value))            
-                return Task.FromResult(value);            
+            if (_store.TryGetValue(key, out var value))
+                return Task.FromResult<string?>(value);
 
             foreach (var file in Directory.GetFiles(basePath, "sst_*.json").OrderByDescending(f => f))
             {
                 var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
                 if (data != null && data.TryGetValue(key, out value))
                 {
-                    return Task.FromResult(value); // Return first found value
+                    return Task.FromResult<string?>(value); // Return first found value
                 }
             }
 
-            return null;
+            return Task.FromResult<string?>(null); // Return null instead of an exception
         }
 
         public async Task DeleteAsync(string key)
