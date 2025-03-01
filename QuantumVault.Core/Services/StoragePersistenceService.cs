@@ -1,4 +1,6 @@
-﻿using QuantumVault.Infrastructure.Persistence;
+﻿using QuantumVault.Core.Enums;
+using QuantumVault.Core.Models;
+using QuantumVault.Services.Interfaces;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,6 +18,7 @@ namespace QuantumVault.Core.Services
 
         private readonly int _maxEntries = 1000;
         private readonly LinkedList<KeyValuePair<string, string>> _recentEntries;
+        public readonly SortedDictionary<int, Queue<KeyValueRequestModel>> _taskQueue = new();
 
         public StoragePersistenceService()
         {
@@ -102,8 +105,6 @@ namespace QuantumVault.Core.Services
                 }
             }
         }
-
-
 
         public void AppendToLog(string operation, string key, string? value = null)
         {
@@ -212,6 +213,30 @@ namespace QuantumVault.Core.Services
         {
             var sstFiles = Directory.GetFiles(basePath, "sst_*.json").ToList();
             return sstFiles.Count;
+        }
+
+        public void Enqueue(KeyValueRequestModel request)
+        {
+            lock (_lock)
+            {
+                if (!_taskQueue.ContainsKey((int)request.Priority))
+                    _taskQueue[(int)request.Priority] = new Queue<KeyValueRequestModel>();
+
+                _taskQueue[(int)request.Priority].Enqueue(request);
+            }
+        }
+
+        public KeyValueRequestModel? Dequeue()
+        {
+            lock (_lock)
+            {
+                foreach (var key in _taskQueue.Keys.OrderBy(k => k))
+                {
+                    if (_taskQueue[key].Count > 0)
+                        return _taskQueue[key].Dequeue();
+                }
+            }
+            return null;
         }
 
         private void LoadExistingSnapshot()

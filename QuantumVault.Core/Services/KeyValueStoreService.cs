@@ -1,4 +1,6 @@
-﻿using QuantumVault.Services.Interfaces;
+﻿using QuantumVault.Core.Enums;
+using QuantumVault.Core.Models;
+using QuantumVault.Services.Interfaces;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
@@ -21,6 +23,8 @@ namespace QuantumVault.Core.Services
         private readonly SemaphoreSlim _readSemaphore;
         private readonly ConcurrentQueue<KeyValuePair<string, string>> _writeQueue = new();
 
+        private readonly CancellationTokenSource _cts = new();
+
         public KeyValueStoreService(IStoragePersistenceService persistenceService)
         {
             Directory.CreateDirectory(basePath); // Ensure directory exists
@@ -28,6 +32,7 @@ namespace QuantumVault.Core.Services
             _writeSemaphore = new SemaphoreSlim(_writeLimit, _writeLimit);
             _readSemaphore = new SemaphoreSlim(_readLimit, _readLimit);
 
+            Task.Run(ProcessQueueAsync);
             _persistenceService = persistenceService;
             _store = _persistenceService.LoadData();
         }
@@ -214,6 +219,28 @@ namespace QuantumVault.Core.Services
         public int GetStoreCount()
         {
             return _store.Count;
+        }
+
+        public void EnqueueRequest(RequestPriority priority, Func<Task> action)
+        {
+            var request = new KeyValueRequestModel(priority, action);
+            _persistenceService.Enqueue(request);
+        }
+
+        private async Task ProcessQueueAsync()
+        {
+            while (!_cts.Token.IsCancellationRequested)
+            {
+                var request = _persistenceService.Dequeue();
+                if (request != null)
+                {
+                    await request.Execute();
+                }
+                else
+                {
+                    await Task.Delay(100); // Avoid busy-waiting
+                }
+            }
         }
 
         private int _overloadCounter = 0;

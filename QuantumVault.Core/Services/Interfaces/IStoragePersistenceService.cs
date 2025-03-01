@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using QuantumVault.Core.Models;
+using System.Collections.Concurrent;
 
 namespace QuantumVault.Services.Interfaces
 {
@@ -11,5 +12,7 @@ namespace QuantumVault.Services.Interfaces
         void FlushStoreToSSTable();
         void CompactSSTables(int _sstCompactionBatchSize);
         int GetSSTableCount();
+        void Enqueue(KeyValueRequestModel request);
+        KeyValueRequestModel? Dequeue();
     }
 }

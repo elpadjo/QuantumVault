@@ -1,4 +1,6 @@
-﻿namespace QuantumVault.Services.Interfaces
+﻿using QuantumVault.Core.Enums;
+
+namespace QuantumVault.Services.Interfaces
 {
     public interface IKeyValueStoreService
     {
@@ -9,5 +11,6 @@
             string startKey, string endKey, int pageSize, int pageNumber);
         Task<IDictionary<string, string>> BatchPutAsync(Dictionary<string, string> keyValues);
         int GetStoreCount();
+        void EnqueueRequest(RequestPriority priority, Func<Task> action);
     }
 }

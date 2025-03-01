@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using QuantumVault.Core.Enums;
+using QuantumVault.Core.Helpers;
 using QuantumVault.Core.Models;
 using QuantumVault.Services.Interfaces;
 
@@ -15,137 +17,71 @@ namespace QuantumVault.Api.Endpoints
 
             app.MapPost("/quantumvault/v1/put", async ([FromServices] IKeyValueStoreService storeService, [FromBody] KeyValueModel request) =>
             {
-                try
+                return await Util.HandleRequestAsync(async () =>
                 {
-                    if (string.IsNullOrWhiteSpace(request.Key) || string.IsNullOrWhiteSpace(request.Value))                    
+                    if (string.IsNullOrWhiteSpace(request.Key) || string.IsNullOrWhiteSpace(request.Value))
                         return Results.BadRequest(new { message = "Payload must contain exactly one key-value pair with non-empty values." });
-                    
-                    await storeService.PutAsync(request.Key, request.Value);
-                    return Results.Ok(new { message = "Key stored successfully" });
 
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (ArgumentException ex)  // Handle invalid input
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (Exception)  // Catch-all for unexpected issues
-                {
-                    return Results.Problem("An unexpected error occurred.");
-                }
+                    var tcs = new TaskCompletionSource<bool>();
+
+                    storeService.EnqueueRequest(RequestPriority.Low, async () =>
+                    {
+                        try
+                        {
+                            await storeService.PutAsync(request.Key, request.Value);
+                            tcs.SetResult(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            tcs.SetException(ex);
+                        }
+                    });
+
+                    await tcs.Task;
+                    return Results.Ok(new { message = "Key stored successfully" });
+                });
             });
 
             app.MapGet("/quantumvault/v1/read/{key}", async ([FromServices] IKeyValueStoreService storeService, [FromRoute] string key) =>
-            {                
-                try
+            {
+                return await Util.HandleRequestAsync(async () =>
                 {
                     var value = await storeService.ReadAsync(key);
-                    return value is not null ?
-                    Results.Ok(new { key, value }) : Results.NotFound();
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (KeyNotFoundException)  // Handle missing keys
-                {
-                    return Results.NotFound(new { message = "Key not found" });
-                }
-                catch (ArgumentException ex)  // Handle invalid input
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (Exception)  // Catch-all for unexpected issues
-                {
-                    return Results.Problem("An unexpected error occurred.");
-                }
+                    return value is not null ? Results.Ok(new { key, value }) : Results.NotFound();
+                });
             });
 
             app.MapDelete("/quantumvault/v1/delete/{key}", async ([FromServices] IKeyValueStoreService storeService, [FromRoute] string key) =>
-            {                
-                try
+            {
+                return await Util.HandleRequestAsync(async () =>
                 {
                     await storeService.DeleteAsync(key);
                     return Results.Ok(new { message = "Key deleted successfully" });
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (KeyNotFoundException)  // Handle missing keys
-                {
-                    return Results.NotFound(new { message = "Key not found" });
-                }
-                catch (ArgumentException ex)  // Handle invalid input
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (Exception)  // Catch-all for unexpected issues
-                {
-                    return Results.Problem("An unexpected error occurred.");
-                }
+                });
             });
 
-            app.MapGet("/quantumvault/v1/range", async ([FromServices] IKeyValueStoreService storeService, 
-                [FromQuery] string startKey, 
+            app.MapGet("/quantumvault/v1/range", async ([FromServices] IKeyValueStoreService storeService,
+                [FromQuery] string startKey,
                 [FromQuery] string endKey,
-                [FromQuery] int pageSize = 20, 
+                [FromQuery] int pageSize = 20,
                 [FromQuery] int pageNumber = 1) =>
-            {                
-                try
+            {
+                return await Util.HandleRequestAsync(async () =>
                 {
-                    var(values, totalItems) = await storeService.ReadKeyRangeAsync(startKey, endKey, pageSize, pageNumber);
-                   
-                    return values.Count > 0 
-                        ? Results.Ok(new
-                        {
-                            PageNumber = pageNumber,
-                            PageSize = pageSize,
-                            TotalItems = totalItems,
-                            Data = values
-                        }) 
+                    var (values, totalItems) = await storeService.ReadKeyRangeAsync(startKey, endKey, pageSize, pageNumber);
+                    return values.Count > 0
+                        ? Results.Ok(new { PageNumber = pageNumber, PageSize = pageSize, TotalItems = totalItems, Data = values })
                         : Results.NotFound("No keys found in range.");
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (KeyNotFoundException)  // Handle missing keys
-                {
-                    return Results.NotFound(new { message = "Key not found" });
-                }
-                catch (ArgumentException ex)  // Handle invalid input
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (Exception)  // Catch-all for unexpected issues
-                {
-                    return Results.Problem("An unexpected error occurred.");
-                }
+                });
             });
 
             app.MapPost("/quantumvault/v1/batchput", async ([FromServices] IKeyValueStoreService storeService, [FromBody] KeyValueBatchModel request) =>
-            {                
-                try
+            {
+                return await Util.HandleRequestAsync(async () =>
                 {
                     var results = await storeService.BatchPutAsync(request.KeyValues);
                     return Results.Ok(results);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (ArgumentException ex)  // Handle invalid input
-                {
-                    return Results.BadRequest(new { message = ex.Message });
-                }
-                catch (Exception)  // Catch-all for unexpected issues
-                {
-                    return Results.Problem("An unexpected error occurred.");
-                }
+                });
             });
         }
     }
