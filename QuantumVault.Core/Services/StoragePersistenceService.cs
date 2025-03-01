@@ -20,6 +20,8 @@ namespace QuantumVault.Core.Services
         private readonly LinkedList<KeyValuePair<string, string>> _recentEntries;
         public readonly SortedDictionary<int, Queue<KeyValueRequestModel>> _taskQueue = new();
 
+        private SortedDictionary<string, string> _store = new(); // Ensure in-memory store is always sorted
+
         public StoragePersistenceService()
         {
             
@@ -35,16 +37,15 @@ namespace QuantumVault.Core.Services
             ReplayLog();
         }
 
-        private ConcurrentDictionary<string, string> _store = new();
 
-        public ConcurrentDictionary<string, string> LoadData()
+        public SortedDictionary<string, string> LoadData()
         {
             if (File.Exists(_filePath))
             {
                 try
                 {
                     var json = File.ReadAllText(_filePath);
-                    _store = JsonSerializer.Deserialize<ConcurrentDictionary<string, string>>(json) ?? new();
+                    _store = JsonSerializer.Deserialize<SortedDictionary<string, string>>(json) ?? new();
                 }
                 catch
                 {
@@ -63,23 +64,21 @@ namespace QuantumVault.Core.Services
                     string tempFile = Path.Combine(basePath, "data_store.tmp");
                     WriteToJournal("SNAPSHOT", tempFile);
 
-                    // Load old data & merge
                     LoadExistingSnapshot();
-                    AddEntries(_store);
+                    AddEntries(_store); // Add only new unique entries
 
                     using (var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
                     using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
                     {
                         writer.WriteStartObject();
-                        foreach (var entry in _recentEntries)
+                        foreach (var entry in _recentEntries.DistinctBy(e => e.Key)) // Remove duplicates
                         {
                             writer.WritePropertyName(entry.Key);
                             JsonSerializer.Serialize(writer, entry.Value);
                         }
                         writer.WriteEndObject();
-                    } // <-- Stream is now properly closed before replacement
+                    }
 
-                    // Atomically replace old snapshot
                     if (File.Exists(_filePath))
                     {
                         File.Replace(tempFile, _filePath, null);
@@ -89,15 +88,14 @@ namespace QuantumVault.Core.Services
                         File.Move(tempFile, _filePath);
                     }
 
-                    MarkJournalCommitted(); // Mark success
-
-                    File.WriteAllText(_logFilePath, string.Empty); // Clear WAL after persistence
+                    MarkJournalCommitted();
+                    File.WriteAllText(_logFilePath, string.Empty);
                 }
                 catch (IOException ex) when (ex.Message.Contains("used by another process"))
                 {
                     Console.WriteLine("File is locked, retrying in 100ms...");
                     Thread.Sleep(100);
-                    SaveData(); // Retry logic
+                    SaveData();
                 }
                 catch (Exception ex)
                 {
@@ -145,13 +143,16 @@ namespace QuantumVault.Core.Services
                     }
 
                     // Apply valid log entry
-                    if (operation == "PUT" && value != null)
+                    lock (_lock)
                     {
-                        _store[key] = value;
-                    }
-                    else if (operation == "DELETE")
-                    {
-                        _store.TryRemove(key, out _);
+                        if (operation == "PUT" && value != null)
+                        {
+                            _store[key] = value;
+                        }
+                        else if (operation == "DELETE")
+                        {
+                            _store.Remove(key);
+                        }
                     }
                 }
             }
@@ -181,11 +182,9 @@ namespace QuantumVault.Core.Services
         {
             var sstFiles = Directory.GetFiles(basePath, "sst_*.json").OrderBy(f => f).ToList();
 
-            if (sstFiles.Count <= _sstCompactionBatchSize) return; // Ensure enough files to compact
+            if (sstFiles.Count <= _sstCompactionBatchSize) return;
 
-            // Select the oldest `_sstCompactionBatchSize` files for compaction
             var filesToCompact = sstFiles.Take(_sstCompactionBatchSize).ToList();
-
             Dictionary<string, string> mergedData = new();
 
             foreach (var file in filesToCompact)
@@ -195,16 +194,13 @@ namespace QuantumVault.Core.Services
                 {
                     foreach (var kv in data)
                     {
-                        mergedData[kv.Key] = kv.Value; // Keep latest value
+                        mergedData[kv.Key] = kv.Value; // Keep latest value, removing duplicates
                     }
                 }
-                File.Delete(file); // Remove old file after merging
+                File.Delete(file);
             }
 
-            // Extract the earliest timestamp from the batch (i.e., the last file in `filesToCompact`)
             string earliestTimestamp = Path.GetFileName(filesToCompact.Last()).Split('_')[1];
-
-            // Name the new compacted SST file using the earliest timestamp
             var newSSTFile = Path.Combine(basePath, $"sst_{earliestTimestamp}_compacted.json");
             File.WriteAllText(newSSTFile, JsonSerializer.Serialize(mergedData));
         }
@@ -266,7 +262,7 @@ namespace QuantumVault.Core.Services
             }
         }
 
-        private void AddEntries(ConcurrentDictionary<string, string> entries)
+        private void AddEntries(SortedDictionary<string, string> entries)
         {
             lock (_lock)
             {
@@ -274,11 +270,13 @@ namespace QuantumVault.Core.Services
                 {
                     _recentEntries.AddLast(new KeyValuePair<string, string>(entry.Key, entry.Value));
 
+                    // Maintain the max limit
                     if (_recentEntries.Count > _maxEntries)
                         _recentEntries.RemoveFirst();
                 }
             }
         }
+
 
         private string ComputeSHA256(string input)
         {

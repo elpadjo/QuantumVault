@@ -5,7 +5,7 @@ namespace QuantumVault.Services.Interfaces
 {
     public interface IStoragePersistenceService
     {
-        ConcurrentDictionary<string, string> LoadData();
+        SortedDictionary<string, string> LoadData();
         void SaveData();
         void AppendToLog(string operation, string key, string? value = null);
         void ReplayLog();
