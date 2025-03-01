@@ -50,42 +50,80 @@ namespace QuantumVault.Core.Services
             return null;
         }
 
-        public Task DeleteAsync(string key)
+        public async Task DeleteAsync(string key)
         {
             if (string.IsNullOrWhiteSpace(key))
             {
                 throw new ArgumentException("Key cannot be empty.");
             }
 
+            // Step 1: Remove from in-memory store
             _store.TryRemove(key, out _);
+
+            // Step 2: Record deletion in the WAL (Write-Ahead Log)
             _persistenceService.AppendToLog("DELETE", key);
-            return Task.CompletedTask;
+
+            // Step 3: Remove from SST files
+            foreach (var file in Directory.GetFiles(basePath, "sst_*.json"))
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(file));
+                if (data != null && data.Remove(key)) // Remove if present
+                {
+                    await File.WriteAllTextAsync(file, JsonSerializer.Serialize(data));
+                }
+            }
         }
 
-        public Task<IDictionary<string, string>> ReadKeyRangeAsync(string startKey, string endKey)
+
+        public async Task<IDictionary<string, string>> ReadKeyRangeAsync(string startKey, string endKey)
         {
             if (string.IsNullOrWhiteSpace(startKey) || string.IsNullOrWhiteSpace(endKey))
             {
                 throw new ArgumentException("StartKey and/or EndKey cannot be empty.");
             }
 
-            /* var results = _store
-                .Where(kv => string.Compare(kv.Key, startKey) >= 0 && string.Compare(kv.Key, endKey) <= 0)
-                .ToDictionary(kv => kv.Key, kv => kv.Value);*/
+            Dictionary<string, string> results = new();
 
-            var results = _store
-                .Where(kv => string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
-                             string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0)
-                .ToDictionary(kv => kv.Key, kv => kv.Value);
+            // Step 1: Check in-memory store first
+            foreach (var kv in _store.Where(kv =>
+                        string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
+                        string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0))
+            {
+                results[kv.Key] = kv.Value;
+            }
 
-            // Ensure endKey is explicitly included if it exists
+            // Step 2: Ensure endKey is explicitly included if it exists in _store
             if (_store.TryGetValue(endKey, out var endValue) && !results.ContainsKey(endKey))
             {
                 results[endKey] = endValue;
             }
 
-            return Task.FromResult<IDictionary<string, string>>(results);
+            // Step 3: Check SST files in order of recency
+            foreach (var file in Directory.GetFiles(basePath, "sst_*.json").OrderByDescending(f => f))
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(file));
+                if (data == null) continue;
+
+                foreach (var kv in data)
+                {
+                    if (string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
+                        string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0 &&
+                        !results.ContainsKey(kv.Key))  // Avoid overwriting newer values
+                    {
+                        results[kv.Key] = kv.Value;
+                    }
+                }
+
+                // Step 4: Ensure endKey is explicitly included if found in SST
+                if (data.TryGetValue(endKey, out endValue) && !results.ContainsKey(endKey))
+                {
+                    results[endKey] = endValue;
+                }
+            }
+
+            return results;
         }
+
 
         public Task<IDictionary<string, string>> BatchPutAsync(Dictionary<string, string> keyValues)
         {
