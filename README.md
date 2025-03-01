@@ -23,8 +23,7 @@ QuantumVault is a high-performance, network-available persistent Key/Value store
    ```
 2. Build and run the Docker container:
    ```sh
-   docker build -t quantumvault .
-   docker run -p 8080:8080 quantumvault
+   docker-compose up --build -d
    ```
 3. The service will be available at `http://localhost:8080/quantumvault/v1/`
 
