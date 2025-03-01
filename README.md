@@ -23,39 +23,38 @@ QuantumVault is a high-performance, network-available persistent Key/Value store
    ```
 2. Build and run the Docker container:
    ```sh
-   docker build -t quantumvault .
-   docker run -p 5000:5000 quantumvault
+   docker-compose up --build -d
    ```
-3. The service will be available at `http://localhost:5000/quantumvault/v1/`
+3. The service will be available at `http://localhost:8080/quantumvault/v1/`
 
 ## API Usage
 ### 1. Store a Key-Value Pair
    ```sh
-   curl -X POST "http://localhost:5000/quantumvault/v1/put" \
+   curl -X POST "http://localhost:8080/quantumvault/v1/put" \
         -H "Content-Type: application/json" \
         -d '{"Key": "username", "Value": "john_doe"}'
    ```
 
 ### 2. Retrieve a Value by Key
    ```sh
-   curl -X GET "http://localhost:5000/quantumvault/v1/read/username"
+   curl -X GET "http://localhost:8080/quantumvault/v1/read/username"
    ```
 
 ### 3. Delete a Key
    ```sh
-   curl -X DELETE "http://localhost:5000/quantumvault/v1/delete/username"
+   curl -X DELETE "http://localhost:8080/quantumvault/v1/delete/username"
    ```
 
 ### 4. Batch Store Multiple Keys
    ```sh
-   curl -X POST "http://localhost:5000/quantumvault/v1/batchput" \
+   curl -X POST "http://localhost:8080/quantumvault/v1/batchput" \
         -H "Content-Type: application/json" \
         -d '{"KeyValues": {"key1": "value1", "key2": "value2"}}'
    ```
 
 ### 5. Read Keys in a Range
    ```sh
-   curl -X GET "http://localhost:5000/quantumvault/v1/range?startKey=key1&endKey=key2"
+   curl -X GET "http://localhost:8080/quantumvault/v1/range?startKey=key1&endKey=key2"
    ```
 
 ## Running Tests

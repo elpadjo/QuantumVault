@@ -2,27 +2,19 @@
 
 services:
   quantumvault:
-    container_name: quantumvault_container  # Force a specific container name
+    container_name: quantumvault_container
     image: quantumvault-api
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
-      - "8081:8081"
     environment:
-      - DATA_PATH=/app/data
-      - ASPNETCORE_Kestrel__Certificates__Default__Password=Qvault123LocalCert
-      - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/cert.pfx
+      - DATA_PATH=/storage
+      - ASPNETCORE_URLS=http://+:8080
     volumes:
-      - ./certs:/https:ro
-      - quantumvault_data:/app/data  # Attach the named volume
+      - quantumvault_data:/storage  # Attach the named volume explicitly
 
 volumes:
-  quantumvault_data:
-    name: quantumvault_data  # Force the volume name
-
-
-# Convert .pfx to .pem
-# openssl pkcs12 -in cert.pfx -out temp-cert.pem -nodes -password pass:Qvault123LocalCert
-# openssl pkcs12 -export -out new-cert.pfx -inkey temp-cert.pem -in temp-cert.pem -password pass:Qvault123LocalCert
+  quantumvault_data:  # Ensure the volume is defined
+    name: quantumvault_data
