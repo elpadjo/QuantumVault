@@ -85,24 +85,38 @@ namespace QuantumVault.Core.Services
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key cannot be empty.");
 
-            key = key.ToLowerInvariant(); // Normalize only when needed
+            key = key.ToLowerInvariant(); // Normalize key
 
-            // Step 1: Remove from in-memory store
-            _store.Remove(key, out _);
+            bool existsInMem = false;
+            bool existsInSST = false;
 
-            // Step 2: Record deletion in the WAL (Write-Ahead Log)
-            _persistenceService.AppendToLog("DELETE", key);
+            // Step 1: Check if the key exists in memory
+            if (_store.ContainsKey(key))
+            {
+                _store.Remove(key);
+                existsInMem = true;
+            }
 
-            // Step 3: Remove from SST files
+            // Step 2: Check if the key exists in SST files
             foreach (var file in Directory.GetFiles(basePath, "sst_*.json"))
             {
                 var data = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(file));
-                if (data != null && data.Remove(key)) // Remove if present
+                if (data != null && data.ContainsKey(key))
                 {
+                    
+                    data.Remove(key);
                     await File.WriteAllTextAsync(file, JsonSerializer.Serialize(data));
+                    existsInSST = true;
                 }
             }
+
+            if (!existsInMem && !existsInSST)
+                throw new ArgumentException($"Key '{key}' does not exist in memory or storage.");            
+
+            // Step 3: Record deletion in the WAL (Write-Ahead Log)
+            _persistenceService.AppendToLog("DELETE", key);
         }
+
 
         public async Task<(IDictionary<string, string> Results, int TotalItems)> ReadKeyRangeAsync(
             string startKey, string endKey, int pageSize, int pageNumber)
