@@ -72,7 +72,8 @@ http://localhost:8080/quantumvault/v1/
 - **Response:**
   ```json
   {
-    "batchProcessed": true
+    "key1": "value1",
+    "key2": "value2"
   }
   ```
 - **Error Responses:**
