@@ -9,7 +9,10 @@ http://localhost:8080/quantumvault/v1/
 
 ### 1. **Store a Key-Value Pair**
 - **Endpoint:** `POST /put`
-- **Description:** Stores a key-value pair.
+- **Description:** Stores a key-value pair. Behavior:
+  - Keys are case-insensitive: "MyKey" and "mykey" are treated as the same key.
+  - Values are case-sensitive: "SomeData" and "somedata" are stored as different values.
+
 - **Request Body:**
   ```json
   {

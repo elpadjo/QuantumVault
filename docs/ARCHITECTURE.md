@@ -13,10 +13,17 @@ QuantumVault is a **persistent Key/Value store** designed for efficiency, scalab
 ---
 
 ## 2. **Persistence Strategy**
+### **Storage Engine & Data Consistency**
+- **Keys are stored in a case-insensitive manner** to prevent duplicate entries with different cases.
+- **Internally, all keys are converted to lowercase before storage and retrieval.**
+- **Values remain case-sensitive**, ensuring data integrity while maintaining a consistent lookup mechanism.
+- This approach prevents inconsistencies like `("Key1", "ValueA")` and `("key1", "ValueB")` being treated as separate keys.
+
 ### **Write Path (Put/Bulk Put)**
 1. Data is **written to the in-memory store** for fast access.
 2. The operation is **logged in the WAL** for durability.
 3. A background process periodically **flushes data to SSTables**, removing old WAL entries.
+4. Another background process periodically **Compacts SSTables**.
 
 ### **Read Path (Get/Range Reads)**
 1. Data is first searched in the **in-memory store**.
@@ -49,6 +56,7 @@ QuantumVault is a **persistent Key/Value store** designed for efficiency, scalab
 ### **3. Load Balancing & Rate Limiting**
 - Read/Write operations are controlled using **semaphores**.
 - System monitors **CPU load and memory usage** to adjust batch sizes dynamically.
+- Rate limiting is also employed
 
 ---
 

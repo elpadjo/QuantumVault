@@ -46,6 +46,8 @@ namespace QuantumVault.Core.Services
             if (_writeQueue.Count >= _maxQueueSize)
                 throw new InvalidOperationException("Write queue is overloaded. Try again later.");
 
+            key = key.ToLowerInvariant(); // Normalize only when needed
+
             // manage load
             AdjustThrottling();
 
@@ -69,6 +71,8 @@ namespace QuantumVault.Core.Services
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Key cannot be empty.");
 
+            key = key.ToLowerInvariant(); // Normalize only when needed
+
             if (_store.TryGetValue(key, out var value))
                 return Task.FromResult<string?>(value);
 
@@ -87,9 +91,9 @@ namespace QuantumVault.Core.Services
         public async Task DeleteAsync(string key)
         {
             if (string.IsNullOrWhiteSpace(key))
-            {
                 throw new ArgumentException("Key cannot be empty.");
-            }
+
+            key = key.ToLowerInvariant(); // Normalize only when needed
 
             // Step 1: Remove from in-memory store
             _store.Remove(key, out _);
@@ -113,9 +117,10 @@ namespace QuantumVault.Core.Services
             string startKey, string endKey, int pageSize, int pageNumber)
         {
             if (string.IsNullOrWhiteSpace(startKey) || string.IsNullOrWhiteSpace(endKey))
-            {
                 throw new ArgumentException("StartKey and EndKey cannot be empty.");
-            }
+
+            startKey = startKey.ToLowerInvariant(); // Normalize only when needed
+            endKey = endKey.ToLowerInvariant(); // Normalize only when needed
 
             if (pageSize <= 0 || pageNumber <= 0)
             {
@@ -211,14 +216,17 @@ namespace QuantumVault.Core.Services
 
                     foreach (var kv in currentBatch)
                     {
+                        string normalizedKey = kv.Key.ToLowerInvariant(); // Normalize only when needed
+
                         if (_writeQueue.Count >= _maxQueueSize)
                             throw new InvalidOperationException("Write queue is overloaded. Try again later.");
 
-                        _writeQueue.Enqueue(kv);
-                        _store[kv.Key] = kv.Value;
-                        _persistenceService.AppendToLog("PUT", kv.Key, kv.Value);
-                        processedItems[kv.Key] = kv.Value;
+                        _writeQueue.Enqueue(new KeyValuePair<string, string>(normalizedKey, kv.Value));
+                        _store[normalizedKey] = kv.Value;
+                        _persistenceService.AppendToLog("PUT", normalizedKey, kv.Value);
+                        processedItems[normalizedKey] = kv.Value;
                     }
+
 
                     // Introduce a short delay to manage system pressure if needed
                     if (IsSystemUnderHighLoad())
