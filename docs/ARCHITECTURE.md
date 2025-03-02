@@ -80,5 +80,5 @@ QuantumVault is packaged as a **Docker container** for easy deployment.
 ## 7. **Conclusion**
 QuantumVault is designed for **high performance, fault tolerance, and scalability**. By leveraging **WAL, SSTables, and efficient caching**, it ensures **low-latency access and reliable persistence** while handling large datasets effectively.
 
-For more details, check the [API Documentation](docs/API.md).
+For more details, check the [API Documentation](API.md).
 

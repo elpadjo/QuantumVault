@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IKeyValueStoreService, KeyValueStoreService>();
 builder.Services.AddSingleton<IStoragePersistenceService, StoragePersistenceService>();
 builder.Services.AddHostedService<SnapshotBackgroundService>();
+builder.Services.AddHostedService<StorageBackgroundService>();
 
 var app = builder.Build();
 

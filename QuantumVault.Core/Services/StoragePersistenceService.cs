@@ -1,7 +1,5 @@
-﻿using QuantumVault.Core.Enums;
-using QuantumVault.Core.Models;
+﻿using QuantumVault.Core.Models;
 using QuantumVault.Services.Interfaces;
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -16,7 +14,7 @@ namespace QuantumVault.Core.Services
         private readonly object _lock = new();
         private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
-        private readonly int _maxEntries = 1000;
+        private readonly int _maxEntries = int.Parse(Environment.GetEnvironmentVariable("MAX_ENTRIES") ?? "5000");
         private readonly LinkedList<KeyValuePair<string, string>> _recentEntries;
         public readonly SortedDictionary<int, Queue<KeyValueRequestModel>> _taskQueue = new();
 
@@ -162,48 +160,62 @@ namespace QuantumVault.Core.Services
             }
         }
 
-        public void FlushStoreToSSTable()
+        public void FlushStoreToSSTable(int maxEntriesPerFile)
         {
             if (_store.Count == 0) return;
 
-            string sstFileName = Path.Combine(basePath, $"sst_{DateTime.UtcNow:yyyyMMddHHmmss}.json");
-            WriteToJournal("SSTABLE", sstFileName);
+            WriteToJournal("SSTABLE_FLUSH", basePath);
 
-            var sortedData = _store.OrderBy(kv => kv.Key).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var sortedData = _store.OrderBy(kv => kv.Key).ToList();
+            int totalFiles = (int)Math.Ceiling((double)sortedData.Count / maxEntriesPerFile);
+            long timestamp = DateTime.UtcNow.Ticks; // Start with current timestamp
 
-            File.WriteAllText(sstFileName, JsonSerializer.Serialize(sortedData));
+            for (int i = 0; i < totalFiles; i++)
+            {
+                var batch = sortedData.Skip(i * maxEntriesPerFile).Take(maxEntriesPerFile)
+                                      .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+                string sstFileName = Path.Combine(basePath, $"sst_{timestamp + i}.json");
+                File.WriteAllText(sstFileName, JsonSerializer.Serialize(batch));
+            }
 
             _store.Clear(); // Clear memory after flush
-
             MarkJournalCommitted();
         }
 
-        public void CompactSSTables(int _sstCompactionBatchSize)
+
+        public void CompactSSTables(int _sstCompactionBatchSize, int _maxSSTFiles)
         {
             var sstFiles = Directory.GetFiles(basePath, "sst_*.json").OrderBy(f => f).ToList();
 
-            if (sstFiles.Count <= _sstCompactionBatchSize) return;
-
-            var filesToCompact = sstFiles.Take(_sstCompactionBatchSize).ToList();
-            Dictionary<string, string> mergedData = new();
-
-            foreach (var file in filesToCompact)
+            while (sstFiles.Count > _maxSSTFiles)
             {
-                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
-                if (data != null)
-                {
-                    foreach (var kv in data)
-                    {
-                        mergedData[kv.Key] = kv.Value; // Keep latest value, removing duplicates
-                    }
-                }
-                File.Delete(file);
-            }
+                int batchSize = Math.Min(_sstCompactionBatchSize, sstFiles.Count - 1); // Ensure at least two files in a batch
+                var filesToCompact = sstFiles.Take(batchSize).ToList();
+                Dictionary<string, string> mergedData = new();
 
-            string earliestTimestamp = Path.GetFileName(filesToCompact.Last()).Split('_')[1];
-            var newSSTFile = Path.Combine(basePath, $"sst_{earliestTimestamp}_compacted.json");
-            File.WriteAllText(newSSTFile, JsonSerializer.Serialize(mergedData));
+                foreach (var file in filesToCompact)
+                {
+                    var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
+                    if (data != null)
+                    {
+                        foreach (var kv in data)
+                        {
+                            mergedData[kv.Key] = kv.Value; // Keep latest value, removing duplicates
+                        }
+                    }
+                    File.Delete(file);
+                }
+
+                long timestamp = DateTime.UtcNow.Ticks;
+                var newSSTFile = Path.Combine(basePath, $"sst_{timestamp}.json");
+                File.WriteAllText(newSSTFile, JsonSerializer.Serialize(mergedData));
+
+                // Refresh SST file list after compaction
+                sstFiles = Directory.GetFiles(basePath, "sst_*.json").OrderBy(f => f).ToList();
+            }
         }
+
 
         public int GetSSTableCount()
         {
@@ -276,7 +288,6 @@ namespace QuantumVault.Core.Services
                 }
             }
         }
-
 
         private string ComputeSHA256(string input)
         {

@@ -13,12 +13,13 @@ namespace QuantumVault.Core.Services
         private readonly IStoragePersistenceService _persistenceService;
         private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
-        private readonly int _maxBatchSize = int.Parse(Environment.GetEnvironmentVariable("MAX_BATCH_SIZE") ?? "50");
-        private readonly int _maxQueueSize = int.Parse(Environment.GetEnvironmentVariable("MAX_QUEUE_SIZE") ?? "1000");
-        private readonly int _writeLimit = int.Parse(Environment.GetEnvironmentVariable("WRITE_LIMIT") ?? "500");
-        private readonly int _readLimit = int.Parse(Environment.GetEnvironmentVariable("READ_LIMIT") ?? "500");
-        private readonly double _cpuHighThreshold = double.Parse(Environment.GetEnvironmentVariable("CPU_HIGH_THRESHOLD") ?? "80"); // 80%
-        private readonly double _cpuLowThreshold = double.Parse(Environment.GetEnvironmentVariable("CPU_LOW_THRESHOLD") ?? "50"); // 50%
+        private readonly int _maxBatchSize = int.Parse(Environment.GetEnvironmentVariable("MAX_BATCH_SIZE") ?? "2000");
+        private readonly int _maxQueueSize = int.Parse(Environment.GetEnvironmentVariable("MAX_QUEUE_SIZE") ?? "5000");
+        private readonly int _writeLimit = int.Parse(Environment.GetEnvironmentVariable("WRITE_LIMIT") ?? "1000");
+        private readonly int _readLimit = int.Parse(Environment.GetEnvironmentVariable("READ_LIMIT") ?? "2000");
+        private readonly double _cpuHighThreshold = double.Parse(Environment.GetEnvironmentVariable("CPU_HIGH_THRESHOLD") ?? "85"); // 85%
+        private readonly double _cpuLowThreshold = double.Parse(Environment.GetEnvironmentVariable("CPU_LOW_THRESHOLD") ?? "60"); // 60%
+
         private readonly SemaphoreSlim _writeSemaphore;
         private readonly SemaphoreSlim _readSemaphore;
         private readonly ConcurrentQueue<KeyValuePair<string, string>> _writeQueue = new();

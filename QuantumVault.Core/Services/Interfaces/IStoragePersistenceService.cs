@@ -9,8 +9,8 @@ namespace QuantumVault.Services.Interfaces
         void SaveData();
         void AppendToLog(string operation, string key, string? value = null);
         void ReplayLog();
-        void FlushStoreToSSTable();
-        void CompactSSTables(int _sstCompactionBatchSize);
+        void FlushStoreToSSTable(int maxEntriesPerFile);
+        void CompactSSTables(int _sstCompactionBatchSize, int _maxSSTFiles);
         int GetSSTableCount();
         void Enqueue(KeyValueRequestModel request);
         KeyValueRequestModel? Dequeue();
