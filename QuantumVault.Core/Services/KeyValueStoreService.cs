@@ -1,4 +1,5 @@
-﻿using QuantumVault.Core.Enums;
+﻿using Microsoft.AspNetCore.Http.HttpResults;
+using QuantumVault.Core.Enums;
 using QuantumVault.Core.Models;
 using QuantumVault.Services.Interfaces;
 using System.Collections.Concurrent;
@@ -73,17 +74,8 @@ namespace QuantumVault.Core.Services
 
             key = key.ToLowerInvariant(); // Normalize only when needed
 
-            if (_store.TryGetValue(key, out var value))
-                return Task.FromResult<string?>(value);
-
-            foreach (var file in Directory.GetFiles(basePath, "sst_*.json").OrderByDescending(f => f))
-            {
-                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
-                if (data != null && data.TryGetValue(key, out value))
-                {
-                    return Task.FromResult<string?>(value); // Return first found value
-                }
-            }
+            if (TryGetValue(key, out var value))
+                return Task.FromResult<string?>(value); // Return first found value;
 
             return Task.FromResult<string?>(null); // Return null instead of an exception
         }
@@ -112,24 +104,30 @@ namespace QuantumVault.Core.Services
             }
         }
 
-
         public async Task<(IDictionary<string, string> Results, int TotalItems)> ReadKeyRangeAsync(
             string startKey, string endKey, int pageSize, int pageNumber)
         {
             if (string.IsNullOrWhiteSpace(startKey) || string.IsNullOrWhiteSpace(endKey))
                 throw new ArgumentException("StartKey and EndKey cannot be empty.");
 
-            startKey = startKey.ToLowerInvariant(); // Normalize only when needed
-            endKey = endKey.ToLowerInvariant(); // Normalize only when needed
+            startKey = startKey.ToLowerInvariant(); // Normalize keys
+            endKey = endKey.ToLowerInvariant();
+
+            if (!TryGetValue(startKey, out _))
+                throw new ArgumentException($"StartKey '{startKey}' does not exist in memory or disk.");
+
+            if (!TryGetValue(endKey, out _))
+                throw new ArgumentException($"EndKey '{endKey}' does not exist in memory or disk.");
+
+            if (string.Compare(startKey, endKey, StringComparison.Ordinal) > 0)
+                throw new InvalidOperationException("StartKey must be less than or equal to EndKey.");
 
             if (pageSize <= 0 || pageNumber <= 0)
-            {
                 throw new ArgumentException("PageSize and PageNumber must be greater than zero.");
-            }
 
             var results = new Dictionary<string, string>();
 
-            // Get totalItems
+            // Get total matching items count
             int totalItems = _store.Count(kv =>
                 string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
                 string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0);
@@ -138,7 +136,7 @@ namespace QuantumVault.Core.Services
             var inMemoryResults = _store
                 .Where(kv => string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
                              string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0)
-                .OrderBy(kv => kv.Key) // Ensure sorted order
+                .OrderBy(kv => kv.Key)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -158,8 +156,7 @@ namespace QuantumVault.Core.Services
                     var data = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(file));
                     if (data == null) continue;
 
-                    // Get totalItems
-                    totalItems += _store.Count(kv =>
+                    totalItems += data.Count(kv =>
                         string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
                         string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0);
 
@@ -167,7 +164,6 @@ namespace QuantumVault.Core.Services
                         .Where(kv => string.Compare(kv.Key, startKey, StringComparison.Ordinal) >= 0 &&
                                      string.Compare(kv.Key, endKey, StringComparison.Ordinal) <= 0)
                         .OrderBy(kv => kv.Key)
-                        .Skip((pageNumber - 1) * pageSize)
                         .Take(remaining)
                         .ToDictionary(kv => kv.Key, kv => kv.Value);
 
@@ -339,5 +335,24 @@ namespace QuantumVault.Core.Services
 
             return (cpuUsedMs / (Environment.ProcessorCount * totalMsPassed)) * 100;
         }
+
+        private bool TryGetValue(string key, out string? value)
+        {
+            // Check in-memory store first
+            if (_store.TryGetValue(key, out value))
+                return true;
+
+            // Search SST files
+            foreach (var file in Directory.GetFiles(basePath, "sst_*.json"))
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file));
+                if (data != null && data.TryGetValue(key, out value))
+                    return true;
+            }
+
+            value = null;
+            return false; // Key does not exist anywhere
+        }
+
     }
 }

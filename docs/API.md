@@ -87,6 +87,11 @@ http://localhost:8080/quantumvault/v1/
 ### 5. **Read Keys in a Range**
 - **Endpoint:** `GET /range?startKey={startKey}&endKey={endKey}&pageSize={pageSize}&pageNumber={pageNumber}`
 - **Description:** Fetches all key-value pairs in the given key range with pagination.
+- **Requirements**:
+  - **Both `startKey` and `endKey` must exist** in storage (either memory or SST files).
+  - **`endKey` must be greater than or equal to `startKey`** based on natural sorting.
+  - **If `startKey` does not exist, the request will fail with `404 Not Found`.**
+  - **If `endKey` is smaller than `startKey`, the request will be rejected with `400 Bad Request`.**
 - **Response:**
   ```json
   {

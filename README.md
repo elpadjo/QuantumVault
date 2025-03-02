@@ -15,6 +15,10 @@ QuantumVault is a high-performance, network-available persistent Key/Value store
 - **Values are stored as-is**: Case sensitivity is preserved for values.
 - **Example**:
   - Storing `("Key1", "Value1")` and `("key1", "Value2")` will overwrite, keeping only `"key1" → "Value2"`.
+- **Range queries (`ReadKeyRangeAsync`) require valid keys.**
+- **Both `startKey` and `endKey` must exist** before querying a range.
+- **The range follows natural order**, meaning `endKey` must not be smaller than `startKey`.
+
 
 
 ## Installation & Setup
