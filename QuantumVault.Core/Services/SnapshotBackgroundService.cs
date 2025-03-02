@@ -7,6 +7,8 @@ namespace QuantumVault.Core.Services
     {
         private readonly IStoragePersistenceService _persistenceService;
 
+        private readonly int _saveInterval = int.Parse(Environment.GetEnvironmentVariable("SAVE_INTERVAL") ?? "1");
+
         public SnapshotBackgroundService(IStoragePersistenceService persistenceService)
         {
             _persistenceService = persistenceService;
@@ -17,7 +19,7 @@ namespace QuantumVault.Core.Services
             while (!stoppingToken.IsCancellationRequested)
             {
                 SaveData();
-                await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(_saveInterval), stoppingToken);
             }
         }
 
