@@ -44,7 +44,10 @@ namespace QuantumVault.Tests
             var response = await _client.GetAsync($"/quantumvault/v1/read/{keyValue.Key}");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var content = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
-            Assert.Equal("readValue", content["value"]);
+            if(content != null)            
+                Assert.Equal("readValue", content["value"]);
+            else
+                Assert.Equal("readValue", "");
         }
 
         [Fact]
@@ -105,7 +108,6 @@ namespace QuantumVault.Tests
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
 
-        // Performance & Load Tests
         [Fact]
         public async Task HighThroughput_ShouldHandleManyWrites()
         {
@@ -115,10 +117,12 @@ namespace QuantumVault.Tests
                 var keyValue = new { Key = $"key{i}", Value = $"value{i}" };
                 tasks.Add(_client.PostAsJsonAsync("/quantumvault/v1/put", keyValue));
             }
-            await Task.WhenAll(tasks);
-            foreach (var response in tasks)
+
+            var responses = await Task.WhenAll(tasks); // Await all tasks
+
+            foreach (var response in responses) // Iterate over awaited responses
             {
-                Assert.Equal(HttpStatusCode.OK, response.Result.StatusCode);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             }
         }
 
@@ -138,11 +142,11 @@ namespace QuantumVault.Tests
             {
                 readTasks.Add(_client.GetAsync($"/quantumvault/v1/read/concurrentKey{i}"));
             }
-            await Task.WhenAll(readTasks);
 
-            foreach (var response in readTasks)
+            var responses = await Task.WhenAll(readTasks);
+            foreach (var response in responses)
             {
-                Assert.Equal(HttpStatusCode.OK, response.Result.StatusCode);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             }
         }
     }

@@ -16,9 +16,9 @@ namespace QuantumVault.Core.Services
 
         private readonly int _maxEntries = int.Parse(Environment.GetEnvironmentVariable("MAX_ENTRIES") ?? "5000");
         private readonly LinkedList<KeyValuePair<string, string>> _recentEntries;
-        public readonly SortedDictionary<int, Queue<KeyValueRequestModel>> _taskQueue = new();
+        public readonly SortedDictionary<int, Queue<KeyValueRequestModel>> _taskQueue = [];
 
-        private SortedDictionary<string, string> _store = new(); // Ensure in-memory store is always sorted
+        private SortedDictionary<string, string> _store = []; // Ensure in-memory store is always sorted
 
         public StoragePersistenceService()
         {
@@ -43,11 +43,11 @@ namespace QuantumVault.Core.Services
                 try
                 {
                     var json = File.ReadAllText(_filePath);
-                    _store = JsonSerializer.Deserialize<SortedDictionary<string, string>>(json) ?? new();
+                    _store = JsonSerializer.Deserialize<SortedDictionary<string, string>>(json) ?? [];
                 }
                 catch
                 {
-                    _store = new();
+                    _store = [];
                 }
             }
             return _store;
@@ -127,7 +127,7 @@ namespace QuantumVault.Core.Services
 
                     string operation = parts[0];
                     string key = parts[1];
-                    string value = parts.Length > 3 ? parts[2] : null;
+                    string? value = parts.Length > 3 ? parts[2] : null;
                     string storedChecksum = parts[^1]; // Last part is the checksum
 
                     // Recompute checksum and validate
@@ -192,7 +192,7 @@ namespace QuantumVault.Core.Services
             {
                 int batchSize = Math.Min(_sstCompactionBatchSize, sstFiles.Count - 1); // Ensure at least two files in a batch
                 var filesToCompact = sstFiles.Take(batchSize).ToList();
-                Dictionary<string, string> mergedData = new();
+                Dictionary<string, string> mergedData = [];
 
                 foreach (var file in filesToCompact)
                 {
@@ -212,7 +212,7 @@ namespace QuantumVault.Core.Services
                 File.WriteAllText(newSSTFile, JsonSerializer.Serialize(mergedData));
 
                 // Refresh SST file list after compaction
-                sstFiles = Directory.GetFiles(basePath, "sst_*.json").OrderBy(f => f).ToList();
+                sstFiles = [.. Directory.GetFiles(basePath, "sst_*.json").OrderBy(f => f)];
             }
         }
 
@@ -289,11 +289,10 @@ namespace QuantumVault.Core.Services
             }
         }
 
-        private string ComputeSHA256(string input)
+        private static string ComputeSHA256(string input)
         {
-            using var sha256 = SHA256.Create();
             byte[] bytes = Encoding.UTF8.GetBytes(input);
-            byte[] hash = sha256.ComputeHash(bytes);
+            byte[] hash = SHA256.HashData(bytes);
             return Convert.ToHexString(hash); // Returns the hash as a hex string
         }
 
