@@ -10,6 +10,17 @@ QuantumVault is a high-performance, network-available persistent Key/Value store
 - **RESTful API**: Exposes simple endpoints for data operations.
 - **Dockerized Deployment**: Fully containerized using Docker for easy deployment.
 
+## Key-Value Storage Behavior
+- **Keys are case-insensitive**: The system automatically converts all keys to lowercase before storing them.
+- **Values are stored as-is**: Case sensitivity is preserved for values.
+- **Example**:
+  - Storing `("Key1", "Value1")` and `("key1", "Value2")` will overwrite, keeping only `"key1" → "Value2"`.
+- **Range queries (`ReadKeyRangeAsync`) require valid keys.**
+- **Both `startKey` and `endKey` must exist** before querying a range.
+- **The range follows natural order**, meaning `endKey` must not be smaller than `startKey`.
+
+
+
 ## Installation & Setup
 ### Prerequisites
 - [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) (If you don't want to use docker)
