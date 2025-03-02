@@ -111,5 +111,5 @@ http://localhost:8080/quantumvault/v1/
 Currently, QuantumVault does not enforce authentication. Future versions may include API key-based authentication for better security.
 
 ## Contact
-For support, open an issue on GitHub or contact `dosubijoshua@gmail.com`.
+For support, open an issue on GitHub or contact `josserayz@gmail.com`.
 

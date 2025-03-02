@@ -9,7 +9,7 @@ namespace QuantumVault.Core.Services
 {
     public class KeyValueStoreService : IKeyValueStoreService
     {
-        private readonly ConcurrentDictionary<string, string> _store;
+        private readonly SortedDictionary<string, string> _store;
         private readonly IStoragePersistenceService _persistenceService;
         private readonly string basePath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "./data";
 
@@ -91,7 +91,7 @@ namespace QuantumVault.Core.Services
             }
 
             // Step 1: Remove from in-memory store
-            _store.TryRemove(key, out _);
+            _store.Remove(key, out _);
 
             // Step 2: Record deletion in the WAL (Write-Ahead Log)
             _persistenceService.AppendToLog("DELETE", key);

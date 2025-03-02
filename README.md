@@ -65,11 +65,11 @@ dotnet test
 ```
 
 ## More Documentation
-For more details, check the [API Documentation](docs/api.md) and [Architecture Overview](docs/architecture.md)
+For more details, check the [API Documentation](docs/API.md) and [Architecture Overview](docs/ARCHITECTURE.md)
 
 ## License
 This project is licensed under the [Apache 2.0 License].
 
 ## Contact
-For inquiries, open an issue or reach out via email at `josserayz@example.com`.
+For inquiries, open an issue or reach out via email at `josserayz@gmail.com`.
 

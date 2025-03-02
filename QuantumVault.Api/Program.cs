@@ -20,7 +20,7 @@ else
     app.UseExceptionHandler("/Error");
 }
 
-app.UseHttpsRedirection();  // Redirect HTTP to HTTPS (only if HTTPS is available)
+//app.UseHttpsRedirection();  // Redirect HTTP to HTTPS (only if HTTPS is available)
 
 // Map endpoints
 app.MapStoreEndpoints();
