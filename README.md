@@ -3,12 +3,27 @@
 QuantumVault is a high-performance, network-available persistent Key/Value store designed for efficiency, scalability, and crash resilience. It supports low-latency read/write operations, batch processing, and persistence using Write-Ahead Logging (WAL) and SSTables.
 
 ## Features
-- **Persistent Storage**: Uses WAL and SSTables for data durability.
-- **High Throughput**: Efficient batch processing and concurrency handling.
-- **Crash Resilience**: Ensures fast recovery with WAL replay.
-- **Scalable Reads/Writes**: In-memory caching and file-based persistence for large datasets.
-- **RESTful API**: Exposes simple endpoints for data operations.
-- **Dockerized Deployment**: Fully containerized using Docker for easy deployment.
+- **Persistent Storage**: Implements Write-Ahead Logging (WAL) and SSTables to ensure data durability and crash resilience.
+- **Low Latency Reads/Writes**: Uses an in-memory `SortedDictionary` for fast lookups, with semaphores for controlled read/write operations.
+- **High Throughput**: Supports batching (`BatchPutAsync`), write queueing (`ConcurrentQueue`), and background services (`StorageBackgroundService`) for efficient processing.
+- **Handling Large Datasets**: Periodic flushing of in-memory data to SSTables reduces memory overhead while maintaining quick access to frequently used data.
+- **Crash Resilience**: WAL ensures data persistence, while snapshot recovery and journal replay mechanisms enable fast recovery after failures.
+- **Predictable Performance**: Dynamic throttling, CPU-aware batch size adjustments, and priority-based request queuing help maintain stability under heavy load.
+- **RESTful API**: Provides simple and intuitive endpoints for data operations, making integration straightforward.
+- **Dockerized Deployment**: Fully containerized using Docker for easy deployment and scalability.
+
+## Tradeoffs
+- **Memory Usage vs. Persistence Speed**: Storing data in memory allows fast access but requires periodic flushing to disk to prevent excessive RAM usage.
+- **Read Latency vs. Storage Efficiency**: Reads require checking both in-memory storage and SSTables, adding slight overhead compared to purely in-memory solutions.
+- **Throughput vs. Durability**: Writes are batched and queued for efficiency, which may introduce slight delays before data is fully persisted to disk.
+
+## Relation to Research Papers
+- **Bigtable (Google)**: Inspired by Bigtable’s SSTable-based storage model, ensuring efficient reads/writes and scalable persistence.
+- **Bitcask (Riak)**: Utilizes WAL and an append-only storage structure similar to Bitcask for crash recovery and efficient writes.
+- **LSM-Tree (LevelDB, RocksDB)**: Implements a Log-Structured Merge-Tree approach with SSTable compaction for optimized storage management.
+- **Raft/Paxos**: While not currently distributed, Raft/Paxos could be integrated for consensus and fault tolerance in a multi-node setup.
+
+
 
 ## Key-Value Storage Behavior
 - **Keys are case-insensitive**: The system automatically converts all keys to lowercase before storing them.
