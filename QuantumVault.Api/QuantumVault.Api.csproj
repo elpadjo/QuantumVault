@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>3bfeddea-8a74-4600-9d39-aa1b163f079b</UserSecretsId>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+   <DockerfileContext>..</DockerfileContext>
+   <Dockerfile>../Dockerfile</Dockerfile>
+   <DockerfileFile>../Dockerfile</DockerfileFile>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QuantumVault.Core\QuantumVault.Core.csproj" />
+  </ItemGroup>
+
+</Project>

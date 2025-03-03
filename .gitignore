@@ -481,3 +481,6 @@ Logs/
 
 #Ignore prod env settings
 appsettings.Production.json
+
+#Ignore test data
+data/

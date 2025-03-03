@@ -1,33 +1,86 @@
-# TheQuantumVault
-### A .NET 8 Distributed Key/Value Store
-This project is a high-performance, persistent Key/Value store built using .NET 8 with a focus on low latency, high throughput, and fault tolerance. It provides a RESTful API for storing and retrieving key-value pairs, supporting:
+# QuantumVault - Persistent Key/Value Store
 
-## Endpoints:
-- PUT /store – Store a key-value pair
-= GET /store/{key} – Retrieve a value by key
-- DELETE /store/{key} – Remove a key-value pair
-- GET /store/range?startKey=A&endKey=Z – Retrieve a range of keys
-- POST /store/batch – Store multiple key-value pairs
+QuantumVault is a high-performance, network-available persistent Key/Value store designed for efficiency, scalability, and crash resilience. It supports low-latency read/write operations, batch processing, and persistence using Write-Ahead Logging (WAL) and SSTables.
 
-## Features:
-- Persistent Storage – Ensures data durability beyond application restarts
-- Replication & Failover – Multi-node support with automatic failover
-- Scalability – Handles large datasets efficiently
-- Dockerized Deployment – Includes docker-compose.yml for multi-node setup
+## Features
+- **Persistent Storage**: Uses WAL and SSTables for data durability.
+- **High Throughput**: Efficient batch processing and concurrency handling.
+- **Crash Resilience**: Ensures fast recovery with WAL replay.
+- **Scalable Reads/Writes**: In-memory caching and file-based persistence for large datasets.
+- **RESTful API**: Exposes simple endpoints for data operations.
+- **Dockerized Deployment**: Fully containerized using Docker for easy deployment.
 
-## Tech Stack:
-- .NET 8 (Minimal APIs)
-- File-based Persistent Storage
-- Docker & Docker Compose for multi-node deployment
+## Key-Value Storage Behavior
+- **Keys are case-insensitive**: The system automatically converts all keys to lowercase before storing them.
+- **Values are stored as-is**: Case sensitivity is preserved for values.
+- **Example**:
+  - Storing `("Key1", "Value1")` and `("key1", "Value2")` will overwrite, keeping only `"key1" â†’ "Value2"`.
+- **Range queries (`ReadKeyRangeAsync`) require valid keys.**
+- **Both `startKey` and `endKey` must exist** before querying a range.
+- **The range follows natural order**, meaning `endKey` must not be smaller than `startKey`.
 
-## Setup & Usage:
-- Clone the repo
-- Run docker-compose up -d to start multiple instances
-- Use a REST client or curl to interact with the API
 
-## Future Enhancements:
-- Load balancing for better traffic distribution
-- Improved data replication strategies
+
+## Installation & Setup
+### Prerequisites
+- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) (If you don't want to use docker)
+- [Docker](https://www.docker.com/get-started)
+
+### Running with Docker
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/your-username/quantumvault.git
+   cd quantumvault
+   ```
+2. Build and run the Docker container:
+   ```sh
+   docker-compose up --build -d
+   ```
+3. The service will be available at `http://localhost:8080/quantumvault/v1/`
+
+## API Usage
+### 1. Store a Key-Value Pair
+   ```sh
+   curl -X POST "http://localhost:8080/quantumvault/v1/put" \
+        -H "Content-Type: application/json" \
+        -d '{"Key": "username", "Value": "john_doe"}'
+   ```
+
+### 2. Retrieve a Value by Key
+   ```sh
+   curl -X GET "http://localhost:8080/quantumvault/v1/read/username"
+   ```
+
+### 3. Delete a Key
+   ```sh
+   curl -X DELETE "http://localhost:8080/quantumvault/v1/delete/username"
+   ```
+
+### 4. Batch Store Multiple Keys
+   ```sh
+   curl -X POST "http://localhost:8080/quantumvault/v1/batchput" \
+        -H "Content-Type: application/json" \
+        -d '{"KeyValues": {"key1": "value1", "key2": "value2"}}'
+   ```
+
+### 5. Read Keys in a Range
+   ```sh
+   curl -X GET "http://localhost:8080/quantumvault/v1/range?startKey=key1&endKey=key2"
+   ```
+
+## Running Tests
+QuantumVault uses xUnit for testing.
+```sh
+cd QuantumVault.Tests
+dotnet test
+```
+
+## More Documentation
+For more details, check the [API Documentation](docs/API.md) and [Architecture Overview](docs/ARCHITECTURE.md)
 
 ## License
-Apache 2.0
+This project is licensed under the [Apache 2.0 License].
+
+## Contact
+For inquiries, open an issue or reach out via email at `josserayz@gmail.com`.
+
